@@ -1,7 +1,5 @@
 Welcome to OpenOCD!
 ===================
-Please refer to http://fatalfeel.blogspot.com/2015/12/openocd-with-eclipse-debug-kernel-of.html
-
 1. preinstall
 sudo apt update
 sudo apt install libftdi-dev
@@ -14,8 +12,7 @@ sudo apt install automake autoconf libtool pkg-config
 make && make install
 
 3.
-10.0.1 code base from
-openocd:
+openocd 10.0.1 code base:
 Antonio Borneo <borneo.antonio@gmail.com>  2020-05-10 16:57:59
 
 jimtcl:
@@ -24,9 +21,21 @@ Steve Bennett <steveb@workware.net.au>  2019-11-20 09:30:21
 libjaylink:
 Marc Schink <jaylink-dev@marcschink.de>  2019-06-08 05:24:43
 
-3.
+4.
+OpenOcd need to receive 64 bits address from gdb on aarch64:
+(gdb normal):
+http://www.mediafire.com/file/fi4mstilpruspkv/build_aarch64_gdb.sh
+(gdb read lzma section)
+http://www.mediafire.com/file/a1xeyw0l3nvhrid/build_aarch64_lzma_gdb.sh
+
+5.
+You can import openocd peoject in eclipse
+
+6.
 Any question post your issue:
 https://github.com/fatalfeel/openocd_integrated/issues
 
-4.
+7.
+How to use OpenOcd in eclipse:
+http://fatalfeel.blogspot.com/2015/12/openocd-with-eclipse-debug-kernel-of.html
 Email: fatalfeel@yahoo.com.tw
