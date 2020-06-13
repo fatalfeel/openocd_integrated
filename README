@@ -34,8 +34,8 @@ http://www.mediafire.com/file/a1xeyw0l3nvhrid/build_aarch64_lzma_gdb.sh
 5.
 After configure and make, remove directory .git
 Import OpenOcd peoject in eclipse.
-Search all O2, O3 in Makefile fiels change them to O0.
-make celan && make
+Search all O2, O3 in "Makefile" files and change O2, O3 to O0
+make clean && make
 Now you can debug and set breakpoint in OpenOcd source.
 
 6.
