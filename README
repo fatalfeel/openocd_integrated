@@ -13,26 +13,33 @@ make && make install
 
 3.
 openocd 10.0.1 code base:
+https://git.code.sf.net/p/openocd/code
 Antonio Borneo <borneo.antonio@gmail.com>  2020-05-10 16:57:59
 
 jimtcl:
+https://github.com/msteveb/jimtcl
 Steve Bennett <steveb@workware.net.au>  2019-11-20 09:30:21
 
 libjaylink:
+http://repo.or.cz/r/libjaylink.git
 Marc Schink <jaylink-dev@marcschink.de>  2019-06-08 05:24:43
 
 4.
 OpenOcd need to receive 64 bits address from gdb on aarch64:
 (gdb normal):
 http://www.mediafire.com/file/fi4mstilpruspkv/build_aarch64_gdb.sh
-(gdb read lzma section)
+(gdb can read lzma section)
 http://www.mediafire.com/file/a1xeyw0l3nvhrid/build_aarch64_lzma_gdb.sh
 
 5.
-You can import openocd peoject in eclipse
+After configure and make, remove directory .git
+Import OpenOcd peoject in eclipse.
+Search all O2, O3 in Makefile fiels change them to O0.
+make celan && make
+Now you can debug and set breakpoint in OpenOcd source.
 
 6.
-Any question post your issue:
+Any question post your issue here:
 https://github.com/fatalfeel/openocd_integrated/issues
 
 7.
