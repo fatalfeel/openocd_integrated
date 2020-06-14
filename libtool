@@ -1,5 +1,5 @@
 #! /bin/bash
-# Generated automatically by config.status (openocd) 0.10.0+dev
+# Generated automatically by config.status (openocd) 0.10.1+dev
 # Libtool was configured on host ublinux:
 # NOTE: Changes made to this file will be lost: look at ltmain.sh.
 

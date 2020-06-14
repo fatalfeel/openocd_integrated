@@ -281,7 +281,7 @@
 #define PACKAGE_NAME "openocd"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "openocd 0.10.0+dev"
+#define PACKAGE_STRING "openocd 0.10.1+dev"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "openocd"
@@ -290,7 +290,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "0.10.0+dev"
+#define PACKAGE_VERSION "0.10.1+dev"
 
 /* 0 if you don't want parport to use giveio. */
 #define PARPORT_USE_GIVEIO 0
@@ -305,7 +305,7 @@
 #define TIME_WITH_SYS_TIME 1
 
 /* Version number of package */
-#define VERSION "0.10.0+dev"
+#define VERSION "0.10.1+dev"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */
