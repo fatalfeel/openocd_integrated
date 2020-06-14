@@ -74,7 +74,7 @@ JAYLINK_PRIV uint16_t buffer_get_u16(const uint8_t *buffer, size_t offset)
 	 * host byte order.
 	 */
 #ifdef WORDS_BIGENDIAN
-	value = (((uint16_t)buffer[offset + 1])) | \
+	value = (((uint16_t)buffer[offset + 1])) |
 		(((uint16_t)buffer[offset + 0]) << 8);
 #else
 	memcpy(&value, buffer + offset, sizeof(value));
@@ -128,9 +128,9 @@ JAYLINK_PRIV uint32_t buffer_get_u32(const uint8_t *buffer, size_t offset)
 	 * host byte order.
 	 */
 #ifdef WORDS_BIGENDIAN
-	value = (((uint32_t)buffer[offset + 3])) | \
-		(((uint32_t)buffer[offset + 2]) << 8) | \
-		(((uint32_t)buffer[offset + 1]) << 16) | \
+	value = (((uint32_t)buffer[offset + 3])) |
+		(((uint32_t)buffer[offset + 2]) << 8) |
+		(((uint32_t)buffer[offset + 1]) << 16) |
 		(((uint32_t)buffer[offset + 0]) << 24);
 #else
 	memcpy(&value, buffer + offset, sizeof(value));

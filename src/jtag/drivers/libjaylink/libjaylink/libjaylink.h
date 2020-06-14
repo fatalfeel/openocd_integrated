@@ -30,6 +30,10 @@
 #include <arpa/inet.h>
 #endif
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /**
  * @file
  *
@@ -617,6 +621,10 @@ JAYLINK_API int jaylink_version_library_get_current(void);
 JAYLINK_API int jaylink_version_library_get_revision(void);
 JAYLINK_API int jaylink_version_library_get_age(void);
 JAYLINK_API const char *jaylink_version_library_get_string(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #include "version.h"
 

@@ -31,7 +31,7 @@ Building and installing
 In order to get and build the latest Git version of libjaylink, run the
 following commands:
 
-    $ git clone git://git.zapb.de/libjaylink.git
+    $ git clone https://gitlab.zapb.de/libjaylink/libjaylink.git
     $ cd libjaylink
     $ ./autogen.sh
     $ ./configure
@@ -67,4 +67,4 @@ version 2 or later. See COPYING file for details.
 Website
 -------
 
-<http://git.zapb.de/libjaylink.git>
+<https://gitlab.zapb.de/libjaylink/libjaylink.git>
