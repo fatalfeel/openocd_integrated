@@ -14,15 +14,12 @@ make && make install
 3.
 openocd 0.10.1 code base:
 https://git.code.sf.net/p/openocd/code
-Antonio Borneo <borneo.antonio@gmail.com>  2020-05-10 16:57:59
 
 jimtcl:
 https://github.com/msteveb/jimtcl
-Steve Bennett <steveb@workware.net.au>  2019-11-20 09:30:21
 
 libjaylink:
 http://repo.or.cz/r/libjaylink.git
-Marc Schink <dev@zapb.de>  2020-06-06 18:20:38
 
 4.
 OpenOcd need to receive 64 bits address from gdb on aarch64:
