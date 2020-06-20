@@ -49,6 +49,15 @@ struct aarch64_brp {
 	uint8_t BRPn;
 };
 
+//begin: by stone
+struct aarch64_wrp {
+	int 			used;
+	target_addr_t 	value;
+	uint32_t 		control;
+	uint8_t 		WRPn;
+};
+//end: by stone
+
 struct aarch64_common {
 	int common_magic;
 
@@ -61,6 +70,12 @@ struct aarch64_common {
 	int brp_num;
 	int brp_num_available;
 	struct aarch64_brp *brp_list;
+
+	//by stone begin
+	int wrp_num;
+	int wrp_num_available;
+	struct aarch64_wrp* wrp_list;
+	//by stone end
 
 	struct armv8_common armv8_common;
 

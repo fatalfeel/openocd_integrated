@@ -59,6 +59,12 @@ static int aarch64_set_hybrid_breakpoint(struct target *target,
 	struct breakpoint *breakpoint);
 static int aarch64_unset_breakpoint(struct target *target,
 	struct breakpoint *breakpoint);
+//begin: by stone
+static int aarch64_set_watchpoint(struct target *target,
+	struct watchpoint *watchpoint, uint8_t matchmode);
+static int aarch64_unset_watchpoint(struct target *target,
+	struct watchpoint *watchpoint);
+//end: by stone
 static int aarch64_mmu(struct target *target, int *enabled);
 static int aarch64_virt2phys(struct target *target,
 	target_addr_t virt, target_addr_t *phys);
@@ -1667,6 +1673,168 @@ static int aarch64_remove_breakpoint(struct target *target, struct breakpoint *b
 	return ERROR_OK;
 }
 
+//begin: by stone
+static int aarch64_set_watchpoint(struct target *target, struct watchpoint *watchpoint, uint8_t matchmode)
+{
+	int 		retval;
+	int 		wrp_i = 0;
+	uint32_t	control;
+	uint8_t		access_mode;
+	uint8_t		byte_addr_select = 0x0F;
+	int64_t 	wpt_value;
+	struct aarch64_common*	aarch64 	= target_to_aarch64(target);
+	struct armv8_common*	armv8 		= &aarch64->armv8_common;
+	struct aarch64_wrp*		wrp_list	= aarch64->wrp_list;
+
+	if (watchpoint->set)
+	{
+		LOG_WARNING("breakpoint already set");
+		return ERROR_OK;
+	}
+
+	while (wrp_list[wrp_i].used && (wrp_i < aarch64->wrp_num))
+		wrp_i++;
+
+	if (wrp_i >= aarch64->wrp_num)
+	{
+		LOG_ERROR("ERROR Can not find free Watchpoint Register Pair");
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	}
+
+	watchpoint->set = wrp_i + 1;
+	access_mode 	= watchpoint->rw+1;	/*01b=load, 10b=store, 11b=both*/
+
+	/*	Arm-64 byte_addr_select = 0x0F
+	    xxxxxxx1b = the watchpoint hits (WVR & 0xFFFFFFFC)+0 is accessed
+		xxxxxx1xb = the watchpoint hits (WVR & 0xFFFFFFFC)+1 is accessed
+		xxxxx1xxb = the watchpoint hits (WVR & 0xFFFFFFFC)+2 is accessed
+		xxxx1xxxb = the watchpoint hits (WVR & 0xFFFFFFFC)+3 is accessed
+		xxx1xxxxb = the watchpoint hits (WVR & 0xFFFFFFF8)+4 is accessed
+        xx1xxxxxb = the watchpoint hits (WVR & 0xFFFFFFF8)+5 is accessed
+		x1xxxxxxb = the watchpoint hits (WVR & 0xFFFFFFF8)+6 is accessed
+		1xxxxxxxb = the watchpoint hits (WVR & 0xFFFFFFF8)+7 is accessed
+		(WVR & 0xFFFFFFFC)+0 = 0x???????????????0 0x???????????????4 0x???????????????8 0x???????????????c
+		(WVR & 0xFFFFFFFC)+1 = 0x???????????????1 0x???????????????5 0x???????????????9 0x???????????????d
+		(WVR & 0xFFFFFFFC)+2 = 0x???????????????2 0x???????????????6 0x???????????????a 0x???????????????e
+		(WVR & 0xFFFFFFFC)+3 = 0x???????????????3 0x???????????????7 0x???????????????b 0x???????????????f
+		(WVR & 0xFFFFFFF8)+4 = 0x???????????????4 0x???????????????c
+		(WVR & 0xFFFFFFF8)+5 = 0x???????????????5 0x???????????????d
+		(WVR & 0xFFFFFFF8)+6 = 0x???????????????6 0x???????????????e
+		(WVR & 0xFFFFFFF8)+7 = 0x???????????????7 0x???????????????f  */
+
+	control = ((matchmode & 0x7) << 20) | (1 << 13)	| (byte_addr_select << 5) | (access_mode << 3) | (3 << 1) | 1;
+	wrp_list[wrp_i].used = 1;
+	wrp_list[wrp_i].value = (watchpoint->address & 0xFFFFFFFFFFFFFFFC);
+	wrp_list[wrp_i].control = control;
+	wpt_value = wrp_list[wrp_i].value;
+
+	retval = aarch64_dap_write_memap_register_u32(target,
+												armv8->debug_base + CPUV8_DBG_WVR_BASE + 16 * wrp_list[wrp_i].WRPn,
+												(uint32_t)(wpt_value & 0xFFFFFFFF));
+	if (retval != ERROR_OK)
+		return retval;
+
+	retval = aarch64_dap_write_memap_register_u32(target,
+												armv8->debug_base + CPUV8_DBG_WVR_BASE + 4 + 16 * wrp_list[wrp_i].WRPn,
+												(uint32_t)(wpt_value >> 32));
+	if (retval != ERROR_OK)
+		return retval;
+
+	retval = aarch64_dap_write_memap_register_u32(target,
+												armv8->debug_base + CPUV8_DBG_WCR_BASE + 16 * wrp_list[wrp_i].WRPn,
+												wrp_list[wrp_i].control);
+	if (retval != ERROR_OK)
+		return retval;
+
+	return ERROR_OK;
+}
+
+static int aarch64_unset_watchpoint(struct target *target, struct watchpoint *watchpoint)
+{
+	int retval;
+	int wrp_i;
+	struct aarch64_common*	aarch64		= target_to_aarch64(target);
+	struct armv8_common*	armv8		= &aarch64->armv8_common;
+	struct aarch64_wrp*		wrp_list 	= aarch64->wrp_list;
+
+	if (!watchpoint->set)
+	{
+		LOG_WARNING("watchpoint not set");
+		return ERROR_OK;
+	}
+
+	wrp_i = watchpoint->set - 1;
+
+	if ((wrp_i < 0) || (wrp_i >= aarch64->wrp_num))
+	{
+		LOG_DEBUG("Invalid WRP number in watchpoint");
+		return ERROR_OK;
+	}
+
+	LOG_DEBUG("rbp %i control 0x%0" PRIx32 " value 0x%0" PRIx64,
+			wrp_i,
+			wrp_list[wrp_i].control,
+			wrp_list[wrp_i].value);
+
+	wrp_list[wrp_i].used = 0;
+	wrp_list[wrp_i].value = 0;
+	wrp_list[wrp_i].control = 0;
+
+	retval = aarch64_dap_write_memap_register_u32(target,
+												armv8->debug_base + CPUV8_DBG_WCR_BASE + 16 * wrp_list[wrp_i].WRPn,
+												wrp_list[wrp_i].control);
+	if (retval != ERROR_OK)
+		return retval;
+
+	retval = aarch64_dap_write_memap_register_u32(target,
+												armv8->debug_base + CPUV8_DBG_WVR_BASE + 16 * wrp_list[wrp_i].WRPn,
+												(uint32_t)wrp_list[wrp_i].value);
+
+	if (retval != ERROR_OK)
+		return retval;
+
+	retval = aarch64_dap_write_memap_register_u32(target,
+												armv8->debug_base + CPUV8_DBG_WVR_BASE + 4 + 16 * wrp_list[wrp_i].WRPn,
+												(uint32_t)wrp_list[wrp_i].value);
+	if (retval != ERROR_OK)
+		return retval;
+
+	watchpoint->set = 0;
+
+	return ERROR_OK;
+}
+
+static int aarch64_add_watchpoint(struct target *target, struct watchpoint *watchpoint)
+{
+	struct aarch64_common *aarch64 = target_to_aarch64(target);
+
+	if (aarch64->wrp_num_available < 1)
+	{
+		LOG_INFO("no hardware breakpoint available");
+		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
+	}
+
+	aarch64->wrp_num_available--;
+
+	return aarch64_set_watchpoint(target, watchpoint, 0x00);	/* Exact match */
+}
+
+static int aarch64_remove_watchpoint(struct target *target, struct watchpoint *watchpoint)
+{
+	struct aarch64_common *aarch64 = target_to_aarch64(target);
+
+	if (watchpoint->set)
+	{
+		aarch64_unset_watchpoint(target, watchpoint);
+
+		aarch64->wrp_num_available++;
+	}
+
+	return ERROR_OK;
+
+}
+//end: by stone
+
 /*
  * Cortex-A8 Reset functions
  */
@@ -2346,6 +2514,7 @@ static int aarch64_examine_first(struct target *target)
 	aarch64->brp_num = (uint32_t)((debug >> 12) & 0x0F) + 1;
 	aarch64->brp_num_context = (uint32_t)((debug >> 28) & 0x0F) + 1;
 	aarch64->brp_num_available = aarch64->brp_num;
+	free(aarch64->brp_list); //by stone
 	aarch64->brp_list = calloc(aarch64->brp_num, sizeof(struct aarch64_brp));
 	for (i = 0; i < aarch64->brp_num; i++) {
 		aarch64->brp_list[i].used = 0;
@@ -2359,6 +2528,22 @@ static int aarch64_examine_first(struct target *target)
 	}
 
 	LOG_DEBUG("Configured %i hw breakpoints", aarch64->brp_num);
+
+	//begin: by stone
+	aarch64->wrp_num = (uint32_t)((debug >> 20) & 0x0F) + 1;
+	aarch64->wrp_num_available = aarch64->wrp_num;
+	free(aarch64->wrp_list);
+	aarch64->wrp_list = calloc(aarch64->wrp_num, sizeof(struct aarch64_wrp));
+	for (i = 0; i < aarch64->wrp_num; i++)
+	{
+		aarch64->wrp_list[i].used = 0;
+		aarch64->wrp_list[i].value = 0;
+		aarch64->wrp_list[i].control = 0;
+		aarch64->wrp_list[i].WRPn = i;
+	}
+
+	LOG_DEBUG("Configured %i hw watchpoints", aarch64->wrp_num);
+	//end: by stone
 
 	target->state = TARGET_UNKNOWN;
 	target->debug_reason = DBG_REASON_NOTHALTED;
@@ -2829,8 +3014,8 @@ struct target_type aarch64_target = {
 	.add_context_breakpoint = aarch64_add_context_breakpoint,
 	.add_hybrid_breakpoint = aarch64_add_hybrid_breakpoint,
 	.remove_breakpoint = aarch64_remove_breakpoint,
-	.add_watchpoint = NULL,
-	.remove_watchpoint = NULL,
+	.add_watchpoint = aarch64_add_watchpoint, //by stone
+	.remove_watchpoint = aarch64_remove_watchpoint,
 
 	.commands = aarch64_command_handlers,
 	.target_create = aarch64_target_create,

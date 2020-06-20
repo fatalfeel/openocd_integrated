@@ -71,14 +71,14 @@ static int cortex_a_set_hybrid_breakpoint(struct target *target,
 	struct breakpoint *breakpoint);
 static int cortex_a_unset_breakpoint(struct target *target,
 	struct breakpoint *breakpoint);
-static int cortex_a_wait_dscr_bits(struct target *target, uint32_t mask,
-	uint32_t value, uint32_t *dscr);
-//by stone begin
+//begin: by stone
 static int cortex_a_set_watchpoint(struct target *target,
 	struct watchpoint *watchpoint, uint8_t matchmode);
 static int cortex_a_unset_watchpoint(struct target *target,
 	struct watchpoint *watchpoint);
-//by stone end
+//end: by stone
+static int cortex_a_wait_dscr_bits(struct target *target, uint32_t mask,
+	uint32_t value, uint32_t *dscr);
 static int cortex_a_mmu(struct target *target, int *enabled);
 static int cortex_a_mmu_modify(struct target *target, int enable);
 static int cortex_a_virt2phys(struct target *target,
@@ -1666,14 +1666,14 @@ static int cortex_a_remove_breakpoint(struct target *target, struct breakpoint *
 //by stone begin
 static int cortex_a_set_watchpoint(struct target *target, struct watchpoint *watchpoint, uint8_t matchmode)
 {
-	int retval;
-	int wrp_i = 0;
+	int 		retval;
+	int 		wrp_i = 0;
 	uint32_t	control;
 	uint8_t		access_mode;
 	uint8_t		byte_addr_select = 0x0F;
 	struct cortex_a_common*	cortex_a	= target_to_cortex_a(target);
-	struct armv7a_common*		armv7a	= &cortex_a->armv7a_common;
-	struct cortex_a_wrp*			wrp_list	= cortex_a->wrp_list;
+	struct armv7a_common*	armv7a		= &cortex_a->armv7a_common;
+	struct cortex_a_wrp*	wrp_list	= cortex_a->wrp_list;
 
 	if (watchpoint->set)
 	{
@@ -1691,38 +1691,32 @@ static int cortex_a_set_watchpoint(struct target *target, struct watchpoint *wat
 	}
 
 	watchpoint->set = wrp_i + 1;
-	access_mode 		= watchpoint->rw+1;	/*01b=load, 10b=store, 11b=both*/
-	switch( watchpoint->length )
-	{
-		case 1:
-				/*	hit char on
-				 	0001b = (address & 0xFFFFFFFC)+0,
-				 	0010b = (address & 0xFFFFFFFC)+1,
-				   	0100b = (address & 0xFFFFFFFC)+2,
-				   	1000b = (address & 0xFFFFFFFC)+3 */
-				byte_addr_select = 0x01 << (watchpoint->address & 0x03);
-				break;
-		case 2:
-				/*	hit short on
-				 	0011b = (address & 0xFFFFFFFC)+0 and (address & 0xFFFFFFFC)+1,
-					1100b = (address & 0xFFFFFFFC)+2 and (address & 0xFFFFFFFC)+3 */
-				byte_addr_select = 0x03 << (watchpoint->address & 0x02);
-				break;
-	}
+	access_mode 	= watchpoint->rw+1;	/*01b=load, 10b=store, 11b=both*/
+
+	/*	Arm-32 byte_addr_select = 0x0F
+	    0000xxx1b = the watchpoint hits (WVR & 0xFFFFFFFC)+0 is accessed
+		0000xx1xb = the watchpoint hits (WVR & 0xFFFFFFFC)+1 is accessed
+		0000x1xxb = the watchpoint hits (WVR & 0xFFFFFFFC)+2 is accessed
+		00001xxxb = the watchpoint hits (WVR & 0xFFFFFFFC)+3 is accessed
+		(WVR & 0xFFFFFFFC)+0 = 0x???????0 0x???????4 0x???????8 0x???????c
+		(WVR & 0xFFFFFFFC)+1 = 0x???????1 0x???????5 0x???????9 0x???????d
+		(WVR & 0xFFFFFFFC)+2 = 0x???????2 0x???????6 0x???????a 0x???????e
+		(WVR & 0xFFFFFFFC)+3 = 0x???????3 0x???????7 0x???????b 0x???????f	*/
+
 	control = ((matchmode & 0x7) << 20) | (byte_addr_select << 5) | (access_mode << 3) | (3 << 1) | 1;
 	wrp_list[wrp_i].used = 1;
 	wrp_list[wrp_i].value = (watchpoint->address & 0xFFFFFFFC);
 	wrp_list[wrp_i].control = control;
 
 	retval = cortex_a_dap_write_memap_register_u32(target,
-																					armv7a->debug_base + CPUDBG_WVR_BASE + 4 * wrp_list[wrp_i].WRPn,
-																					wrp_list[wrp_i].value);
+												armv7a->debug_base + CPUDBG_WVR_BASE + 4 * wrp_list[wrp_i].WRPn,
+												wrp_list[wrp_i].value);
 	if (retval != ERROR_OK)
 		return retval;
 
 	retval = cortex_a_dap_write_memap_register_u32(target,
-																						armv7a->debug_base + CPUDBG_WCR_BASE + 4 * wrp_list[wrp_i].WRPn,
-																						wrp_list[wrp_i].control);
+												armv7a->debug_base + CPUDBG_WCR_BASE + 4 * wrp_list[wrp_i].WRPn,
+												wrp_list[wrp_i].control);
 
 	if (retval != ERROR_OK)
 		return retval;
@@ -1734,9 +1728,9 @@ static int cortex_a_unset_watchpoint(struct target *target, struct watchpoint *w
 {
 	int retval;
 	int wrp_i;
-	struct cortex_a_common *cortex_a = target_to_cortex_a(target);
-	struct armv7a_common *armv7a = &cortex_a->armv7a_common;
-	struct cortex_a_wrp *wrp_list = cortex_a->wrp_list;
+	struct cortex_a_common* cortex_a 	= target_to_cortex_a(target);
+	struct armv7a_common* armv7a 		= &cortex_a->armv7a_common;
+	struct cortex_a_wrp* wrp_list 		= cortex_a->wrp_list;
 
 	if (!watchpoint->set)
 	{
@@ -1752,21 +1746,26 @@ static int cortex_a_unset_watchpoint(struct target *target, struct watchpoint *w
 		return ERROR_OK;
 	}
 
-	LOG_DEBUG("rbp %i control 0x%0" PRIx32 " value 0x%0" PRIx32, wrp_i, wrp_list[wrp_i].control, wrp_list[wrp_i].value);
+	LOG_DEBUG("rbp %i control 0x%0" PRIx32 " value 0x%0" PRIx32,
+			wrp_i,
+			wrp_list[wrp_i].control,
+			wrp_list[wrp_i].value);
 
 	wrp_list[wrp_i].used = 0;
 	wrp_list[wrp_i].value = 0;
 	wrp_list[wrp_i].control = 0;
 
 	retval = cortex_a_dap_write_memap_register_u32(target,
-																						armv7a->debug_base + CPUDBG_WCR_BASE + 4 * wrp_list[wrp_i].WRPn,
-																						wrp_list[wrp_i].control);
+												armv7a->debug_base + CPUDBG_WCR_BASE + 4 * wrp_list[wrp_i].WRPn,
+												wrp_list[wrp_i].control);
+
 	if (retval != ERROR_OK)
 		return retval;
 
 	retval = cortex_a_dap_write_memap_register_u32(target,
-																						armv7a->debug_base + CPUDBG_WVR_BASE + 4 * wrp_list[wrp_i].WRPn,
-																						wrp_list[wrp_i].value);
+												armv7a->debug_base + CPUDBG_WVR_BASE + 4 * wrp_list[wrp_i].WRPn,
+												wrp_list[wrp_i].value);
+
 	if (retval != ERROR_OK)
 		return retval;
 
@@ -2989,7 +2988,6 @@ static int cortex_a_examine_first(struct target *target)
 	cortex_a->wrp_num_available = cortex_a->wrp_num;
 	free(cortex_a->wrp_list);
 	cortex_a->wrp_list = calloc(cortex_a->wrp_num, sizeof(struct cortex_a_wrp));
-
 	for (i = 0; i < cortex_a->wrp_num; i++)
 	{
 		cortex_a->wrp_list[i].used = 0;
