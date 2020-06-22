@@ -1690,11 +1690,11 @@ static int cortex_a_set_watchpoint(struct target *target, struct watchpoint *wat
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
-	watchpoint->set = wrp_i + 1;
-	access_mode 	= watchpoint->rw+1;	/*01b=load, 10b=store, 11b=both*/
+	watchpoint->set	= wrp_i + 1;
+	access_mode		= watchpoint->rw+1;	/*01b=load, 10b=store, 11b=both*/
 
-	/*	Arm-32 byte_addr_select = 0x0F
-	    0000xxx1b = the watchpoint hits (WVR & 0xFFFFFFFC)+0 is accessed
+	/*	Arm-32 BAS field
+		0000xxx1b = the watchpoint hits (WVR & 0xFFFFFFFC)+0 is accessed
 		0000xx1xb = the watchpoint hits (WVR & 0xFFFFFFFC)+1 is accessed
 		0000x1xxb = the watchpoint hits (WVR & 0xFFFFFFFC)+2 is accessed
 		00001xxxb = the watchpoint hits (WVR & 0xFFFFFFFC)+3 is accessed
@@ -1702,6 +1702,11 @@ static int cortex_a_set_watchpoint(struct target *target, struct watchpoint *wat
 		(WVR & 0xFFFFFFFC)+1 = 0x???????1 0x???????5 0x???????9 0x???????d
 		(WVR & 0xFFFFFFFC)+2 = 0x???????2 0x???????6 0x???????a 0x???????e
 		(WVR & 0xFFFFFFFC)+3 = 0x???????3 0x???????7 0x???????b 0x???????f	*/
+
+	if (watchpoint->length == 1)
+		byte_addr_select = 0x01 << (watchpoint->address & 0x03); //address at 0x???????????????0~f
+	else if (watchpoint->length == 2)
+		byte_addr_select = 0x01 << (watchpoint->address & 0x02); //address at 0x???????????????0,2,4,6,8,a,c,e
 
 	control = ((matchmode & 0x7) << 20) | (byte_addr_select << 5) | (access_mode << 3) | (3 << 1) | 1;
 	wrp_list[wrp_i].used = 1;

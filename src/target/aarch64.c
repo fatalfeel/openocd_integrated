@@ -1701,16 +1701,16 @@ static int aarch64_set_watchpoint(struct target *target, struct watchpoint *watc
 		return ERROR_TARGET_RESOURCE_NOT_AVAILABLE;
 	}
 
-	watchpoint->set = wrp_i + 1;
-	access_mode 	= watchpoint->rw+1;	/*01b=load, 10b=store, 11b=both*/
+	watchpoint->set	= wrp_i + 1;
+	access_mode		= watchpoint->rw+1;	/*01b=load, 10b=store, 11b=both*/
 
-	/*	Arm-64 byte_addr_select = 0x0F
-	    xxxxxxx1b = the watchpoint hits (WVR & 0xFFFFFFFC)+0 is accessed
+	/*	Arm-64 BAS field
+		xxxxxxx1b = the watchpoint hits (WVR & 0xFFFFFFFC)+0 is accessed
 		xxxxxx1xb = the watchpoint hits (WVR & 0xFFFFFFFC)+1 is accessed
 		xxxxx1xxb = the watchpoint hits (WVR & 0xFFFFFFFC)+2 is accessed
 		xxxx1xxxb = the watchpoint hits (WVR & 0xFFFFFFFC)+3 is accessed
 		xxx1xxxxb = the watchpoint hits (WVR & 0xFFFFFFF8)+4 is accessed
-        xx1xxxxxb = the watchpoint hits (WVR & 0xFFFFFFF8)+5 is accessed
+		xx1xxxxxb = the watchpoint hits (WVR & 0xFFFFFFF8)+5 is accessed
 		x1xxxxxxb = the watchpoint hits (WVR & 0xFFFFFFF8)+6 is accessed
 		1xxxxxxxb = the watchpoint hits (WVR & 0xFFFFFFF8)+7 is accessed
 		(WVR & 0xFFFFFFFC)+0 = 0x???????????????0 0x???????????????4 0x???????????????8 0x???????????????c
@@ -1721,6 +1721,11 @@ static int aarch64_set_watchpoint(struct target *target, struct watchpoint *watc
 		(WVR & 0xFFFFFFF8)+5 = 0x???????????????5 0x???????????????d
 		(WVR & 0xFFFFFFF8)+6 = 0x???????????????6 0x???????????????e
 		(WVR & 0xFFFFFFF8)+7 = 0x???????????????7 0x???????????????f  */
+
+	if (watchpoint->length == 1)
+		byte_addr_select = 0x01 << (watchpoint->address & 0x03); //address at 0x???????????????0~f
+	else if (watchpoint->length == 2)
+		byte_addr_select = 0x01 << (watchpoint->address & 0x02); //address at 0x???????????????0,2,4,6,8,a,c,e
 
 	control = ((matchmode & 0x7) << 20) | (1 << 13)	| (byte_addr_select << 5) | (access_mode << 3) | (3 << 1) | 1;
 	wrp_list[wrp_i].used = 1;
