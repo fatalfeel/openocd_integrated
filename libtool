@@ -9141,7 +9141,7 @@ func_mode_link ()
             func_suncc_cstd_abi
 
             if test no != "$suncc_use_cstd_abi"; then
-              func_append postdeps ' -library=Cstd -library=Crun'
+              func_append postdeps ' -library=Cstd -library=CrUun'
             fi
             ;;
           esac
@@ -9154,7 +9154,7 @@ func_mode_link ()
             func_suncc_cstd_abi
 
             if test no != "$suncc_use_cstd_abi"; then
-              func_append postdeps ' -library=Cstd -library=Crun'
+              func_append postdeps ' -library=Cstd -library=CrUun'
             fi
             ;;
           esac
