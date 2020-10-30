@@ -8,6 +8,10 @@ sudo apt install texinfo
 sudo apt install automake autoconf libtool pkg-config
 
 2.
+sudo aclocal
+sudo libtoolize --force
+sudo automake --add-missing
+sudo autoreconf
 ./configure --prefix=/opt/openocd --enable-maintainer-mode --enable-ftdi --enable-target64
 make && make install
 
