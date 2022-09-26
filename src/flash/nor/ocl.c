@@ -1,19 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /***************************************************************************
  *   Copyright (C) 2007 by Pavel Chromy                                    *
  *   chromy@asix.cz                                                        *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -51,7 +40,8 @@ FLASH_BANK_COMMAND_HANDLER(ocl_flash_bank_command)
 	return ERROR_OK;
 }
 
-static int ocl_erase(struct flash_bank *bank, int first, int last)
+static int ocl_erase(struct flash_bank *bank, unsigned int first,
+		unsigned int last)
 {
 	struct ocl_priv *ocl = bank->driver_priv;
 	int retval;
@@ -207,7 +197,6 @@ static int ocl_probe(struct flash_bank *bank)
 	int retval;
 	uint32_t dcc_buffer[1];
 	int sectsize;
-	int i;
 
 	/* purge pending data in DCC */
 	embeddedice_receive(ocl->jtag_info, dcc_buffer, 1);
@@ -276,7 +265,7 @@ static int ocl_probe(struct flash_bank *bank)
 		return ERROR_FLASH_BANK_INVALID;
 	}
 	sectsize = bank->size / bank->num_sectors;
-	for (i = 0; i < bank->num_sectors; i++) {
+	for (unsigned int i = 0; i < bank->num_sectors; i++) {
 		bank->sectors[i].offset = i * sectsize;
 		bank->sectors[i].size = sectsize;
 		bank->sectors[i].is_erased = -1;

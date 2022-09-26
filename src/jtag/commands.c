@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /***************************************************************************
  *   Copyright (C) 2005 by Dominic Rath                                    *
  *   Dominic.Rath@gmx.de                                                   *
@@ -11,19 +13,6 @@
  *                                                                         *
  *   Copyright (C) 2009 Zachary T Welch                                    *
  *   zw@superlucidity.net                                                  *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -66,8 +55,8 @@ void jtag_queue_command(struct jtag_command *cmd)
 	cmd->next = NULL;
 
 	struct jtag_command **last_cmd = next_command_pointer;
-	assert(NULL != last_cmd);
-	assert(NULL == *last_cmd);
+	assert(last_cmd);
+	assert(!*last_cmd);
 	*last_cmd = cmd;
 
 	/* store location where the next command pointer will be stored */
@@ -214,10 +203,10 @@ int jtag_build_buffer(const struct scan_command *cmd, uint8_t **buffer)
 	for (i = 0; i < cmd->num_fields; i++) {
 		if (cmd->fields[i].out_value) {
 			if (LOG_LEVEL_IS(LOG_LVL_DEBUG_IO)) {
-				char *char_buf = buf_to_str(cmd->fields[i].out_value,
+				char *char_buf = buf_to_hex_str(cmd->fields[i].out_value,
 						(cmd->fields[i].num_bits > DEBUG_JTAG_IOZ)
 						? DEBUG_JTAG_IOZ
-								: cmd->fields[i].num_bits, 16);
+								: cmd->fields[i].num_bits);
 
 				LOG_DEBUG("fields[%i].out_value[%i]: 0x%s", i,
 						cmd->fields[i].num_bits, char_buf);
@@ -257,10 +246,10 @@ int jtag_read_buffer(uint8_t *buffer, const struct scan_command *cmd)
 					malloc(DIV_ROUND_UP(num_bits, 8)), 0, num_bits);
 
 			if (LOG_LEVEL_IS(LOG_LVL_DEBUG_IO)) {
-				char *char_buf = buf_to_str(captured,
+				char *char_buf = buf_to_hex_str(captured,
 						(num_bits > DEBUG_JTAG_IOZ)
 						? DEBUG_JTAG_IOZ
-								: num_bits, 16);
+								: num_bits);
 
 				LOG_DEBUG("fields[%i].in_value[%i]: 0x%s",
 						i, num_bits, char_buf);

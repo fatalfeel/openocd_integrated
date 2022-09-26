@@ -1,20 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /*
  * PSoC 5LP flash driver
  *
  * Copyright (c) 2016 Andreas Färber
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 #ifdef HAVE_CONFIG_H
@@ -47,7 +36,7 @@
 #define PANTHER_DEVICE_ID       0x4008001C
 
 /* NVL is not actually mapped to the Cortex-M address space
- * As we need a base addess different from other banks in the device
+ * As we need a base address different from other banks in the device
  * we use the address of NVL programming data in Cypress images */
 #define NVL_META_BASE			0x90000000
 
@@ -86,15 +75,15 @@
 
 #define PM_ACT_CFG0_EN_CLK_SPC      (1 << 3)
 
-#define PHUB_CHx_BASIC_CFG_EN       (1 << 0)
-#define PHUB_CHx_BASIC_CFG_WORK_SEP (1 << 5)
+#define PHUB_CHX_BASIC_CFG_EN       (1 << 0)
+#define PHUB_CHX_BASIC_CFG_WORK_SEP (1 << 5)
 
-#define PHUB_CHx_ACTION_CPU_REQ (1 << 0)
+#define PHUB_CHX_ACTION_CPU_REQ (1 << 0)
 
-#define PHUB_CFGMEMx_CFG0 (1 << 7)
+#define PHUB_CFGMEMX_CFG0 (1 << 7)
 
-#define PHUB_TDMEMx_ORIG_TD0_NEXT_TD_PTR_LAST (0xff << 16)
-#define PHUB_TDMEMx_ORIG_TD0_INC_SRC_ADDR     (1 << 24)
+#define PHUB_TDMEMX_ORIG_TD0_NEXT_TD_PTR_LAST (0xff << 16)
+#define PHUB_TDMEMX_ORIG_TD0_INC_SRC_ADDR     (1 << 24)
 
 #define NVL_3_ECCEN  (1 << 3)
 
@@ -657,7 +646,8 @@ static int psoc5lp_nvl_read(struct flash_bank *bank,
 	return ERROR_OK;
 }
 
-static int psoc5lp_nvl_erase(struct flash_bank *bank, int first, int last)
+static int psoc5lp_nvl_erase(struct flash_bank *bank, unsigned int first,
+		unsigned int last)
 {
 	LOG_WARNING("There is no erase operation for NV Latches");
 	return ERROR_FLASH_OPER_UNSUPPORTED;
@@ -665,9 +655,7 @@ static int psoc5lp_nvl_erase(struct flash_bank *bank, int first, int last)
 
 static int psoc5lp_nvl_erase_check(struct flash_bank *bank)
 {
-	int i;
-
-	for (i = 0; i < bank->num_sectors; i++)
+	for (unsigned int i = 0; i < bank->num_sectors; i++)
 		bank->sectors[i].is_erased = 0;
 
 	return ERROR_OK;
@@ -754,14 +742,14 @@ static int psoc5lp_nvl_write(struct flash_bank *bank,
 }
 
 static int psoc5lp_nvl_get_info_command(struct flash_bank *bank,
-	char *buf, int buf_size)
+	struct command_invocation *cmd)
 {
 	struct psoc5lp_nvl_flash_bank *psoc_nvl_bank = bank->driver_priv;
 	char part_number[PART_NUMBER_LEN];
 
 	psoc5lp_get_part_number(psoc_nvl_bank->device, part_number);
 
-	snprintf(buf, buf_size, "%s", part_number);
+	command_print_sameline(cmd, "%s", part_number);
 
 	return ERROR_OK;
 }
@@ -823,24 +811,8 @@ FLASH_BANK_COMMAND_HANDLER(psoc5lp_nvl_flash_bank_command)
 	return ERROR_OK;
 }
 
-static const struct command_registration psoc5lp_nvl_exec_command_handlers[] = {
-	COMMAND_REGISTRATION_DONE
-};
-
-static const struct command_registration psoc5lp_nvl_command_handlers[] = {
-	{
-		.name = "psoc5lp_nvl",
-		.mode = COMMAND_ANY,
-		.help = "PSoC 5LP NV Latch command group",
-		.usage = "",
-		.chain = psoc5lp_nvl_exec_command_handlers,
-	},
-	COMMAND_REGISTRATION_DONE
-};
-
 const struct flash_driver psoc5lp_nvl_flash = {
 	.name = "psoc5lp_nvl",
-	.commands = psoc5lp_nvl_command_handlers,
 	.flash_bank_command = psoc5lp_nvl_flash_bank_command,
 	.info = psoc5lp_nvl_get_info_command,
 	.probe = psoc5lp_nvl_probe,
@@ -861,11 +833,12 @@ struct psoc5lp_eeprom_flash_bank {
 	const struct psoc5lp_device *device;
 };
 
-static int psoc5lp_eeprom_erase(struct flash_bank *bank, int first, int last)
+static int psoc5lp_eeprom_erase(struct flash_bank *bank, unsigned int first,
+		unsigned int last)
 {
-	int i, retval;
+	int retval;
 
-	for (i = first; i <= last; i++) {
+	for (unsigned int i = first; i <= last; i++) {
 		retval = psoc5lp_spc_erase_sector(bank->target,
 				SPC_ARRAY_EEPROM, i);
 		if (retval != ERROR_OK)
@@ -919,7 +892,7 @@ static int psoc5lp_eeprom_write(struct flash_bank *bank,
 		memset(buf + byte_count, bank->default_padded_value,
 				EEPROM_ROW_SIZE - byte_count);
 
-		LOG_DEBUG("Padding %d bytes", EEPROM_ROW_SIZE - byte_count);
+		LOG_DEBUG("Padding %" PRIu32 " bytes", EEPROM_ROW_SIZE - byte_count);
 		retval = psoc5lp_spc_load_row(target, SPC_ARRAY_EEPROM,
 				buf, EEPROM_ROW_SIZE);
 		if (retval != ERROR_OK)
@@ -934,14 +907,14 @@ static int psoc5lp_eeprom_write(struct flash_bank *bank,
 	return ERROR_OK;
 }
 
-static int psoc5lp_eeprom_get_info_command(struct flash_bank *bank, char *buf, int buf_size)
+static int psoc5lp_eeprom_get_info_command(struct flash_bank *bank, struct command_invocation *cmd)
 {
 	struct psoc5lp_eeprom_flash_bank *psoc_eeprom_bank = bank->driver_priv;
 	char part_number[PART_NUMBER_LEN];
 
 	psoc5lp_get_part_number(psoc_eeprom_bank->device, part_number);
 
-	snprintf(buf, buf_size, "%s", part_number);
+	command_print_sameline(cmd, "%s", part_number);
 
 	return ERROR_OK;
 }
@@ -951,7 +924,7 @@ static int psoc5lp_eeprom_probe(struct flash_bank *bank)
 	struct psoc5lp_eeprom_flash_bank *psoc_eeprom_bank = bank->driver_priv;
 	uint32_t flash_addr = bank->base;
 	uint32_t val;
-	int i, retval;
+	int retval;
 
 	if (psoc_eeprom_bank->probed)
 		return ERROR_OK;
@@ -979,7 +952,7 @@ static int psoc5lp_eeprom_probe(struct flash_bank *bank)
 	bank->num_sectors = DIV_ROUND_UP(bank->size, EEPROM_SECTOR_SIZE);
 	bank->sectors = calloc(bank->num_sectors,
 			       sizeof(struct flash_sector));
-	for (i = 0; i < bank->num_sectors; i++) {
+	for (unsigned int i = 0; i < bank->num_sectors; i++) {
 		bank->sectors[i].size = EEPROM_SECTOR_SIZE;
 		bank->sectors[i].offset = flash_addr - bank->base;
 		bank->sectors[i].is_erased = -1;
@@ -1021,24 +994,8 @@ FLASH_BANK_COMMAND_HANDLER(psoc5lp_eeprom_flash_bank_command)
 	return ERROR_OK;
 }
 
-static const struct command_registration psoc5lp_eeprom_exec_command_handlers[] = {
-	COMMAND_REGISTRATION_DONE
-};
-
-static const struct command_registration psoc5lp_eeprom_command_handlers[] = {
-	{
-		.name = "psoc5lp_eeprom",
-		.mode = COMMAND_ANY,
-		.help = "PSoC 5LP EEPROM command group",
-		.usage = "",
-		.chain = psoc5lp_eeprom_exec_command_handlers,
-	},
-	COMMAND_REGISTRATION_DONE
-};
-
 const struct flash_driver psoc5lp_eeprom_flash = {
 	.name = "psoc5lp_eeprom",
-	.commands = psoc5lp_eeprom_command_handlers,
 	.flash_bank_command = psoc5lp_eeprom_flash_bank_command,
 	.info = psoc5lp_eeprom_get_info_command,
 	.probe = psoc5lp_eeprom_probe,
@@ -1064,27 +1021,28 @@ struct psoc5lp_flash_bank {
 	 * are used for driver private flash operations */
 };
 
-static int psoc5lp_erase(struct flash_bank *bank, int first, int last)
+static int psoc5lp_erase(struct flash_bank *bank, unsigned int first,
+		unsigned int last)
 {
 	struct psoc5lp_flash_bank *psoc_bank = bank->driver_priv;
-	int i, retval;
+	int retval;
 
 	if (!psoc_bank->ecc_enabled) {
 		/* Silently avoid erasing sectors twice */
 		if (last >= first + bank->num_sectors / 2) {
-			LOG_DEBUG("Skipping duplicate erase of sectors %d to %d",
+			LOG_DEBUG("Skipping duplicate erase of sectors %u to %u",
 				first + bank->num_sectors / 2, last);
 			last = first + (bank->num_sectors / 2) - 1;
 		}
 		/* Check for any remaining ECC sectors */
 		if (last >= bank->num_sectors / 2) {
-			LOG_WARNING("Skipping erase of ECC region sectors %d to %d",
+			LOG_WARNING("Skipping erase of ECC region sectors %u to %u",
 				bank->num_sectors / 2, last);
 			last = (bank->num_sectors / 2) - 1;
 		}
 	}
 
-	for (i = first; i <= last; i++) {
+	for (unsigned int i = first; i <= last; i++) {
 		retval = psoc5lp_spc_erase_sector(bank->target,
 				i / SECTORS_PER_BLOCK, i % SECTORS_PER_BLOCK);
 		if (retval != ERROR_OK)
@@ -1099,30 +1057,30 @@ static int psoc5lp_erase_check(struct flash_bank *bank)
 {
 	struct psoc5lp_flash_bank *psoc_bank = bank->driver_priv;
 	struct target *target = bank->target;
-	int i, retval;
+	int retval;
 
 	if (target->state != TARGET_HALTED) {
 		LOG_ERROR("Target not halted");
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
-	int num_sectors = bank->num_sectors;
+	unsigned int num_sectors = bank->num_sectors;
 	if (psoc_bank->ecc_enabled)
 		num_sectors *= 2;	/* count both std and ecc sector always */
 
 	struct target_memory_check_block *block_array;
 	block_array = malloc(num_sectors * sizeof(struct target_memory_check_block));
-	if (block_array == NULL)
+	if (!block_array)
 		return ERROR_FAIL;
 
-	for (i = 0; i < num_sectors; i++) {
+	for (unsigned int i = 0; i < num_sectors; i++) {
 		block_array[i].address = bank->base + bank->sectors[i].offset;
 		block_array[i].size = bank->sectors[i].size;
 		block_array[i].result = UINT32_MAX; /* erase state unknown */
 	}
 
 	bool fast_check = true;
-	for (i = 0; i < num_sectors; ) {
+	for (unsigned int i = 0; i < num_sectors; ) {
 		retval = armv7m_blank_check_memory(target,
 					block_array + i, num_sectors - i,
 					bank->erased_value);
@@ -1138,14 +1096,14 @@ static int psoc5lp_erase_check(struct flash_bank *bank)
 
 	if (fast_check) {
 		if (psoc_bank->ecc_enabled) {
-			for (i = 0; i < bank->num_sectors; i++)
+			for (unsigned int i = 0; i < bank->num_sectors; i++)
 				bank->sectors[i].is_erased =
 					(block_array[i].result != 1)
 					? block_array[i].result
 					: block_array[i + bank->num_sectors].result;
 				/* if std sector is erased, use status of ecc sector */
 		} else {
-			for (i = 0; i < num_sectors; i++)
+			for (unsigned int i = 0; i < num_sectors; i++)
 				bank->sectors[i].is_erased = block_array[i].result;
 		}
 		retval = ERROR_OK;
@@ -1288,13 +1246,13 @@ static int psoc5lp_write(struct flash_bank *bank, const uint8_t *buffer,
 
 			retval = target_write_u32(target,
 				even_row ? PHUB_CH0_BASIC_CFG : PHUB_CH1_BASIC_CFG,
-				PHUB_CHx_BASIC_CFG_WORK_SEP | PHUB_CHx_BASIC_CFG_EN);
+				PHUB_CHX_BASIC_CFG_WORK_SEP | PHUB_CHX_BASIC_CFG_EN);
 			if (retval != ERROR_OK)
 				goto err_dma;
 
 			retval = target_write_u32(target,
 				even_row ? PHUB_CFGMEM0_CFG0 : PHUB_CFGMEM1_CFG0,
-				PHUB_CFGMEMx_CFG0);
+				PHUB_CFGMEMX_CFG0);
 			if (retval != ERROR_OK)
 				goto err_dma;
 
@@ -1306,8 +1264,8 @@ static int psoc5lp_write(struct flash_bank *bank, const uint8_t *buffer,
 
 			retval = target_write_u32(target,
 				even_row ? PHUB_TDMEM0_ORIG_TD0 : PHUB_TDMEM1_ORIG_TD0,
-				PHUB_TDMEMx_ORIG_TD0_INC_SRC_ADDR |
-				PHUB_TDMEMx_ORIG_TD0_NEXT_TD_PTR_LAST |
+				PHUB_TDMEMX_ORIG_TD0_INC_SRC_ADDR |
+				PHUB_TDMEMX_ORIG_TD0_NEXT_TD_PTR_LAST |
 				((SPC_OPCODE_LEN + 1 + row_size + 3 + SPC_OPCODE_LEN + 5) & 0xfff));
 			if (retval != ERROR_OK)
 				goto err_dma;
@@ -1324,7 +1282,7 @@ static int psoc5lp_write(struct flash_bank *bank, const uint8_t *buffer,
 
 			retval = target_write_u32(target,
 				even_row ? PHUB_CH0_ACTION : PHUB_CH1_ACTION,
-				PHUB_CHx_ACTION_CPU_REQ);
+				PHUB_CHX_ACTION_CPU_REQ);
 			if (retval != ERROR_OK)
 				goto err_dma_action;
 		}
@@ -1350,7 +1308,7 @@ static int psoc5lp_protect_check(struct flash_bank *bank)
 	struct psoc5lp_flash_bank *psoc_bank = bank->driver_priv;
 	uint8_t row_data[ROW_SIZE];
 	const unsigned protection_bytes_per_sector = ROWS_PER_SECTOR * 2 / 8;
-	unsigned i, j, k, num_sectors;
+	unsigned i, k, num_sectors;
 	int retval;
 
 	if (bank->target->state != TARGET_HALTED) {
@@ -1370,7 +1328,7 @@ static int psoc5lp_protect_check(struct flash_bank *bank)
 		else
 			num_sectors = SECTORS_PER_BLOCK;
 
-		for (j = 0; j < num_sectors; j++) {
+		for (unsigned int j = 0; j < num_sectors; j++) {
 			int sector_nr = i * SECTORS_PER_BLOCK + j;
 			struct flash_sector *sector = &bank->sectors[sector_nr];
 			struct flash_sector *ecc_sector;
@@ -1396,7 +1354,7 @@ static int psoc5lp_protect_check(struct flash_bank *bank)
 	return ERROR_OK;
 }
 
-static int psoc5lp_get_info_command(struct flash_bank *bank, char *buf, int buf_size)
+static int psoc5lp_get_info_command(struct flash_bank *bank, struct command_invocation *cmd)
 {
 	struct psoc5lp_flash_bank *psoc_bank = bank->driver_priv;
 	char part_number[PART_NUMBER_LEN];
@@ -1405,7 +1363,7 @@ static int psoc5lp_get_info_command(struct flash_bank *bank, char *buf, int buf_
 	psoc5lp_get_part_number(psoc_bank->device, part_number);
 	ecc = psoc_bank->ecc_enabled ? "ECC enabled" : "ECC disabled";
 
-	snprintf(buf, buf_size, "%s %s", part_number, ecc);
+	command_print_sameline(cmd, "%s %s", part_number, ecc);
 
 	return ERROR_OK;
 }
@@ -1416,7 +1374,7 @@ static int psoc5lp_probe(struct flash_bank *bank)
 	struct psoc5lp_flash_bank *psoc_bank = bank->driver_priv;
 	uint32_t flash_addr = bank->base;
 	uint8_t nvl[4], temp[2];
-	int i, retval;
+	int retval;
 
 	if (target->state != TARGET_HALTED) {
 		LOG_ERROR("Target not halted");
@@ -1447,7 +1405,7 @@ static int psoc5lp_probe(struct flash_bank *bank)
 
 		bank->sectors = calloc(bank->num_sectors * 2,
 				       sizeof(struct flash_sector));
-		for (i = 0; i < bank->num_sectors; i++) {
+		for (unsigned int i = 0; i < bank->num_sectors; i++) {
 			bank->sectors[i].size = SECTOR_SIZE;
 			bank->sectors[i].offset = flash_addr - bank->base;
 			bank->sectors[i].is_erased = -1;
@@ -1456,7 +1414,7 @@ static int psoc5lp_probe(struct flash_bank *bank)
 			flash_addr += bank->sectors[i].size;
 		}
 		flash_addr = 0x48000000;
-		for (i = bank->num_sectors; i < bank->num_sectors * 2; i++) {
+		for (unsigned int i = bank->num_sectors; i < bank->num_sectors * 2; i++) {
 			bank->sectors[i].size = ROWS_PER_SECTOR * ROW_ECC_SIZE;
 			bank->sectors[i].offset = flash_addr - bank->base;
 			bank->sectors[i].is_erased = -1;

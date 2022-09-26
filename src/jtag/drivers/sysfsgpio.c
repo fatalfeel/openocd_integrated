@@ -1,18 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /***************************************************************************
  *   Copyright (C) 2012 by Creative Product Design, marc @ cpdesign.com.au *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 /* 2014-12: Addition of the SWD protocol support is based on the initial work
@@ -29,7 +18,7 @@
  *
  * A gpio is required for tck, tms, tdi and tdo. One or both of srst and trst
  * must be also be specified. The required jtag gpios are specified via the
- * sysfsgpio_jtag_nums command or the relevant sysfsgpio_XXX_num commang.
+ * sysfsgpio_jtag_nums command or the relevant sysfsgpio_XXX_num commands.
  * The srst and trst gpios are set via the sysfsgpio_srst_num and
  * sysfsgpio_trst_num respectively. GPIO numbering follows the kernel
  * convention of starting from 0.
@@ -54,6 +43,7 @@
 
 #include <helper/time_support.h>
 #include <jtag/interface.h>
+#include <transport/transport.h>
 #include "bitbang.h"
 
 /*
@@ -126,7 +116,7 @@ static int setup_sysfs_gpio(int gpio, int is_output, int init_high)
 			LOG_WARNING("gpio %d is already exported", gpio);
 		} else {
 			LOG_ERROR("Couldn't export gpio %d", gpio);
-			perror("sysfsgpio: ");
+			LOG_ERROR("sysfsgpio: %s", strerror(errno));
 			return ERROR_FAIL;
 		}
 	}
@@ -146,7 +136,7 @@ static int setup_sysfs_gpio(int gpio, int is_output, int init_high)
 	}
 	if (ret < 0) {
 		LOG_ERROR("Couldn't set direction for gpio %d", gpio);
-		perror("sysfsgpio: ");
+		LOG_ERROR("sysfsgpio: %s", strerror(errno));
 		unexport_sysfs_gpio(gpio);
 		return ERROR_FAIL;
 	}
@@ -163,7 +153,7 @@ static int setup_sysfs_gpio(int gpio, int is_output, int init_high)
 	}
 	if (ret < 0) {
 		LOG_ERROR("Couldn't open value for gpio %d", gpio);
-		perror("sysfsgpio: ");
+		LOG_ERROR("sysfsgpio: %s", strerror(errno));
 		unexport_sysfs_gpio(gpio);
 	}
 
@@ -207,7 +197,7 @@ static void sysfsgpio_swdio_drive(bool is_output)
 	ret = open_write_close(buf, is_output ? "high" : "in");
 	if (ret < 0) {
 		LOG_ERROR("Couldn't set direction for gpio %d", swdio_gpio);
-		perror("sysfsgpio: ");
+		LOG_ERROR("sysfsgpio: %s", strerror(errno));
 	}
 
 	last_stored = false;
@@ -230,7 +220,7 @@ static int sysfsgpio_swdio_read(void)
 	return buf[0] != '0';
 }
 
-static void sysfsgpio_swdio_write(int swclk, int swdio)
+static int sysfsgpio_swd_write(int swclk, int swdio)
 {
 	const char one[] = "1";
 	const char zero[] = "0";
@@ -255,6 +245,8 @@ static void sysfsgpio_swdio_write(int swclk, int swdio)
 	last_swdio = swdio;
 	last_swclk = swclk;
 	last_stored = true;
+
+	return ERROR_OK;
 }
 
 /*
@@ -287,11 +279,6 @@ static bb_value_t sysfsgpio_read(void)
  */
 static int sysfsgpio_write(int tck, int tms, int tdi)
 {
-	if (swd_mode) {
-		sysfsgpio_swdio_write(tck, tdi);
-		return ERROR_OK;
-	}
-
 	const char one[] = "1";
 	const char zero[] = "0";
 
@@ -470,76 +457,87 @@ COMMAND_HANDLER(sysfsgpio_handle_swd_gpionum_swdio)
 	return ERROR_OK;
 }
 
-static const struct command_registration sysfsgpio_command_handlers[] = {
+static const struct command_registration sysfsgpio_subcommand_handlers[] = {
 	{
-		.name = "sysfsgpio_jtag_nums",
+		.name = "jtag_nums",
 		.handler = &sysfsgpio_handle_jtag_gpionums,
 		.mode = COMMAND_CONFIG,
 		.help = "gpio numbers for tck, tms, tdi, tdo. (in that order)",
 		.usage = "[tck tms tdi tdo]",
 	},
 	{
-		.name = "sysfsgpio_tck_num",
+		.name = "tck_num",
 		.handler = &sysfsgpio_handle_jtag_gpionum_tck,
 		.mode = COMMAND_CONFIG,
 		.help = "gpio number for tck.",
 		.usage = "[tck]",
 	},
 	{
-		.name = "sysfsgpio_tms_num",
+		.name = "tms_num",
 		.handler = &sysfsgpio_handle_jtag_gpionum_tms,
 		.mode = COMMAND_CONFIG,
 		.help = "gpio number for tms.",
 		.usage = "[tms]",
 	},
 	{
-		.name = "sysfsgpio_tdo_num",
+		.name = "tdo_num",
 		.handler = &sysfsgpio_handle_jtag_gpionum_tdo,
 		.mode = COMMAND_CONFIG,
 		.help = "gpio number for tdo.",
 		.usage = "[tdo]",
 	},
 	{
-		.name = "sysfsgpio_tdi_num",
+		.name = "tdi_num",
 		.handler = &sysfsgpio_handle_jtag_gpionum_tdi,
 		.mode = COMMAND_CONFIG,
 		.help = "gpio number for tdi.",
 		.usage = "[tdi]",
 	},
 	{
-		.name = "sysfsgpio_srst_num",
+		.name = "srst_num",
 		.handler = &sysfsgpio_handle_jtag_gpionum_srst,
 		.mode = COMMAND_CONFIG,
 		.help = "gpio number for srst.",
 		.usage = "[srst]",
 	},
 	{
-		.name = "sysfsgpio_trst_num",
+		.name = "trst_num",
 		.handler = &sysfsgpio_handle_jtag_gpionum_trst,
 		.mode = COMMAND_CONFIG,
 		.help = "gpio number for trst.",
 		.usage = "[trst]",
 	},
 	{
-		.name = "sysfsgpio_swd_nums",
+		.name = "swd_nums",
 		.handler = &sysfsgpio_handle_swd_gpionums,
 		.mode = COMMAND_CONFIG,
 		.help = "gpio numbers for swclk, swdio. (in that order)",
 		.usage = "[swclk swdio]",
 	},
 	{
-		.name = "sysfsgpio_swclk_num",
+		.name = "swclk_num",
 		.handler = &sysfsgpio_handle_swd_gpionum_swclk,
 		.mode = COMMAND_CONFIG,
 		.help = "gpio number for swclk.",
 		.usage = "[swclk]",
 	},
 	{
-		.name = "sysfsgpio_swdio_num",
+		.name = "swdio_num",
 		.handler = &sysfsgpio_handle_swd_gpionum_swdio,
 		.mode = COMMAND_CONFIG,
 		.help = "gpio number for swdio.",
 		.usage = "[swdio]",
+	},
+	COMMAND_REGISTRATION_DONE
+};
+
+static const struct command_registration sysfsgpio_command_handlers[] = {
+	{
+		.name = "sysfsgpio",
+		.mode = COMMAND_ANY,
+		.help = "perform sysfsgpio management",
+		.chain = sysfsgpio_subcommand_handlers,
+		.usage = "",
 	},
 	COMMAND_REGISTRATION_DONE
 };
@@ -572,6 +570,7 @@ static struct bitbang_interface sysfsgpio_bitbang = {
 	.write = sysfsgpio_write,
 	.swdio_read = sysfsgpio_swdio_read,
 	.swdio_drive = sysfsgpio_swdio_drive,
+	.swd_write = sysfsgpio_swd_write,
 	.blink = 0
 };
 
@@ -588,14 +587,18 @@ static void cleanup_fd(int fd, int gpio)
 
 static void cleanup_all_fds(void)
 {
-	cleanup_fd(tck_fd, tck_gpio);
-	cleanup_fd(tms_fd, tms_gpio);
-	cleanup_fd(tdi_fd, tdi_gpio);
-	cleanup_fd(tdo_fd, tdo_gpio);
-	cleanup_fd(trst_fd, trst_gpio);
+	if (transport_is_jtag()) {
+		cleanup_fd(tck_fd, tck_gpio);
+		cleanup_fd(tms_fd, tms_gpio);
+		cleanup_fd(tdi_fd, tdi_gpio);
+		cleanup_fd(tdo_fd, tdo_gpio);
+		cleanup_fd(trst_fd, trst_gpio);
+	}
+	if (transport_is_swd()) {
+		cleanup_fd(swclk_fd, swclk_gpio);
+		cleanup_fd(swdio_fd, swdio_gpio);
+	}
 	cleanup_fd(srst_fd, srst_gpio);
-	cleanup_fd(swclk_fd, swclk_gpio);
-	cleanup_fd(swdio_fd, swdio_gpio);
 }
 
 static bool sysfsgpio_jtag_mode_possible(void)
@@ -626,52 +629,54 @@ static int sysfsgpio_init(void)
 
 	LOG_INFO("SysfsGPIO JTAG/SWD bitbang driver");
 
-	if (sysfsgpio_jtag_mode_possible()) {
-		if (sysfsgpio_swd_mode_possible())
-			LOG_INFO("JTAG and SWD modes enabled");
-		else
-			LOG_INFO("JTAG only mode enabled (specify swclk and swdio gpio to add SWD mode)");
-	} else if (sysfsgpio_swd_mode_possible()) {
-		LOG_INFO("SWD only mode enabled (specify tck, tms, tdi and tdo gpios to add JTAG mode)");
-	} else {
-		LOG_ERROR("Require tck, tms, tdi and tdo gpios for JTAG mode and/or swclk and swdio gpio for SWD mode");
-		return ERROR_JTAG_INIT_FAILED;
-	}
-
-
 	/*
 	 * Configure TDO as an input, and TDI, TCK, TMS, TRST, SRST
 	 * as outputs.  Drive TDI and TCK low, and TMS/TRST/SRST high.
 	 * For SWD, SWCLK and SWDIO are configures as output high.
 	 */
-	if (tck_gpio >= 0) {
+
+	if (transport_is_jtag()) {
+		if (!sysfsgpio_jtag_mode_possible()) {
+			LOG_ERROR("Require tck, tms, tdi and tdo gpios for JTAG mode");
+			return ERROR_JTAG_INIT_FAILED;
+		}
+
 		tck_fd = setup_sysfs_gpio(tck_gpio, 1, 0);
 		if (tck_fd < 0)
 			goto out_error;
-	}
 
-	if (tms_gpio >= 0) {
 		tms_fd = setup_sysfs_gpio(tms_gpio, 1, 1);
 		if (tms_fd < 0)
 			goto out_error;
-	}
 
-	if (tdi_gpio >= 0) {
 		tdi_fd = setup_sysfs_gpio(tdi_gpio, 1, 0);
 		if (tdi_fd < 0)
 			goto out_error;
-	}
 
-	if (tdo_gpio >= 0) {
 		tdo_fd = setup_sysfs_gpio(tdo_gpio, 0, 0);
 		if (tdo_fd < 0)
 			goto out_error;
+
+		/* assume active low*/
+		if (trst_gpio >= 0) {
+			trst_fd = setup_sysfs_gpio(trst_gpio, 1, 1);
+			if (trst_fd < 0)
+				goto out_error;
+		}
 	}
 
-	/* assume active low*/
-	if (trst_gpio >= 0) {
-		trst_fd = setup_sysfs_gpio(trst_gpio, 1, 1);
-		if (trst_fd < 0)
+	if (transport_is_swd()) {
+		if (!sysfsgpio_swd_mode_possible()) {
+			LOG_ERROR("Require swclk and swdio gpio for SWD mode");
+			return ERROR_JTAG_INIT_FAILED;
+		}
+
+		swclk_fd = setup_sysfs_gpio(swclk_gpio, 1, 0);
+		if (swclk_fd < 0)
+			goto out_error;
+
+		swdio_fd = setup_sysfs_gpio(swdio_gpio, 1, 0);
+		if (swdio_fd < 0)
 			goto out_error;
 	}
 
@@ -680,25 +685,6 @@ static int sysfsgpio_init(void)
 		srst_fd = setup_sysfs_gpio(srst_gpio, 1, 1);
 		if (srst_fd < 0)
 			goto out_error;
-	}
-
-	if (swclk_gpio >= 0) {
-		swclk_fd = setup_sysfs_gpio(swclk_gpio, 1, 0);
-		if (swclk_fd < 0)
-			goto out_error;
-	}
-
-	if (swdio_gpio >= 0) {
-		swdio_fd = setup_sysfs_gpio(swdio_gpio, 1, 0);
-		if (swdio_fd < 0)
-			goto out_error;
-	}
-
-	if (sysfsgpio_swd_mode_possible()) {
-		if (swd_mode)
-			bitbang_swd_switch_seq(JTAG_TO_SWD);
-		else
-			bitbang_swd_switch_seq(SWD_TO_JTAG);
 	}
 
 	return ERROR_OK;

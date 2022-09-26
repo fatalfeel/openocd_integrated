@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /***************************************************************************
  *   Copyright (C) 2015 by Ivan Meleca                                     *
  *   ivan@artekit.eu                                                       *
@@ -18,19 +20,6 @@
  *                                                                         *
  *   Copyright (C) 2015 Tomas Vanek                                        *
  *   vanekt@fbl.cz                                                         *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -41,6 +30,7 @@
 #include "imp.h"
 #include <helper/binarybuffer.h>
 #include <target/algorithm.h>
+#include <target/arm_adi_v5.h>
 #include <target/armv7m.h>
 #include <target/cortex_m.h>
 
@@ -146,16 +136,23 @@ struct kinetis_ke_flash_bank {
 
 static int kinetis_ke_mdm_write_register(struct adiv5_dap *dap, unsigned reg, uint32_t value)
 {
-	int retval;
 	LOG_DEBUG("MDM_REG[0x%02x] <- %08" PRIX32, reg, value);
 
-	retval = dap_queue_ap_write(dap_ap(dap, 1), reg, value);
+	struct adiv5_ap *ap = dap_get_ap(dap, 1);
+	if (!ap) {
+		LOG_DEBUG("MDM: failed to get AP");
+		return ERROR_FAIL;
+	}
+
+	int retval = dap_queue_ap_write(ap, reg, value);
 	if (retval != ERROR_OK) {
 		LOG_DEBUG("MDM: failed to queue a write request");
+		dap_put_ap(ap);
 		return retval;
 	}
 
 	retval = dap_run(dap);
+	dap_put_ap(ap);
 	if (retval != ERROR_OK) {
 		LOG_DEBUG("MDM: dap_run failed");
 		return retval;
@@ -166,14 +163,21 @@ static int kinetis_ke_mdm_write_register(struct adiv5_dap *dap, unsigned reg, ui
 
 static int kinetis_ke_mdm_read_register(struct adiv5_dap *dap, unsigned reg, uint32_t *result)
 {
-	int retval;
-	retval = dap_queue_ap_read(dap_ap(dap, 1), reg, result);
+	struct adiv5_ap *ap = dap_get_ap(dap, 1);
+	if (!ap) {
+		LOG_DEBUG("MDM: failed to get AP");
+		return ERROR_FAIL;
+	}
+
+	int retval = dap_queue_ap_read(ap, reg, result);
 	if (retval != ERROR_OK) {
 		LOG_DEBUG("MDM: failed to queue a read request");
+		dap_put_ap(ap);
 		return retval;
 	}
 
 	retval = dap_run(dap);
+	dap_put_ap(ap);
 	if (retval != ERROR_OK) {
 		LOG_DEBUG("MDM: dap_run failed");
 		return retval;
@@ -434,7 +438,7 @@ static int kinetis_ke_prepare_flash(struct flash_bank *bank)
 	return ERROR_OK;
 }
 
-int kinetis_ke_stop_watchdog(struct target *target)
+static int kinetis_ke_stop_watchdog(struct target *target)
 {
 	struct working_area *watchdog_algorithm;
 	struct armv7m_algorithm armv7m_info;
@@ -764,7 +768,8 @@ static int kinetis_ke_write_words(struct flash_bank *bank, const uint8_t *buffer
 	return retval;
 }
 
-static int kinetis_ke_protect(struct flash_bank *bank, int set, int first, int last)
+static int kinetis_ke_protect(struct flash_bank *bank, int set,
+		unsigned int first, unsigned int last)
 {
 	LOG_WARNING("kinetis_ke_protect not supported yet");
 	/* FIXME: TODO */
@@ -809,7 +814,7 @@ static int kinetis_ke_protect_check(struct flash_bank *bank)
 	if (fpopen && fpldis && fphdis) {
 		LOG_WARNING("No flash protection found.");
 
-		for (uint32_t i = 0; i < (uint32_t) bank->num_sectors; i++)
+		for (unsigned int i = 0; i < bank->num_sectors; i++)
 			bank->sectors[i].is_protected = 0;
 
 		kinfo->protection_size = 0;
@@ -840,7 +845,7 @@ static int kinetis_ke_protect_check(struct flash_bank *bank)
 		/* hprot_from indicates from where the upper region is protected */
 		hprot_from = (0x8000 - hprot_size) / kinfo->sector_size;
 
-		for (uint32_t i = 0; i < (uint32_t) bank->num_sectors; i++) {
+		for (unsigned int i = 0; i < bank->num_sectors; i++) {
 
 			/* Check if the sector is in the lower region */
 			if (bank->sectors[i].offset < 0x4000) {
@@ -931,42 +936,10 @@ static int kinetis_ke_ftmrx_command(struct flash_bank *bank, uint8_t count,
 	return ERROR_OK;
 }
 
-COMMAND_HANDLER(kinetis_ke_securing_test)
+static int kinetis_ke_erase(struct flash_bank *bank, unsigned int first,
+		unsigned int last)
 {
 	int result;
-	struct target *target = get_current_target(CMD_CTX);
-	struct flash_bank *bank = NULL;
-	uint32_t address;
-
-	uint8_t FCCOBIX[2], FCCOBHI[2], FCCOBLO[2], fstat;
-
-	result = get_flash_bank_by_addr(target, 0x00000000, true, &bank);
-	if (result != ERROR_OK)
-		return result;
-
-	assert(bank != NULL);
-
-	if (target->state != TARGET_HALTED) {
-		LOG_ERROR("Target not halted");
-		return ERROR_TARGET_NOT_HALTED;
-	}
-
-	address = bank->base + 0x00000400;
-
-	FCCOBIX[0] = 0;
-	FCCOBHI[0] = FTMRX_CMD_ERASESECTOR;
-	FCCOBLO[0] = address >> 16;
-
-	FCCOBIX[1] = 1;
-	FCCOBHI[1] = address >> 8;
-	FCCOBLO[1] = address;
-
-	return kinetis_ke_ftmrx_command(bank, 2, FCCOBIX, FCCOBHI, FCCOBLO, &fstat);
-}
-
-static int kinetis_ke_erase(struct flash_bank *bank, int first, int last)
-{
-	int result, i;
 	uint8_t FCCOBIX[2], FCCOBHI[2], FCCOBLO[2], fstat;
 	bool fcf_erased = false;
 
@@ -982,7 +955,7 @@ static int kinetis_ke_erase(struct flash_bank *bank, int first, int last)
 	if (result != ERROR_OK)
 		return result;
 
-	for (i = first; i <= last; i++) {
+	for (unsigned int i = first; i <= last; i++) {
 		FCCOBIX[0] = 0;
 		FCCOBHI[0] = FTMRX_CMD_ERASESECTOR;
 		FCCOBLO[0] = (bank->base + bank->sectors[i].offset) >> 16;
@@ -994,11 +967,9 @@ static int kinetis_ke_erase(struct flash_bank *bank, int first, int last)
 		result = kinetis_ke_ftmrx_command(bank, 2, FCCOBIX, FCCOBHI, FCCOBLO, &fstat);
 
 		if (result != ERROR_OK)	{
-			LOG_WARNING("erase sector %d failed", i);
+			LOG_WARNING("erase sector %u failed", i);
 			return ERROR_FLASH_OPERATION_FAILED;
 		}
-
-		bank->sectors[i].is_erased = 1;
 
 		if (i == 2)
 			fcf_erased = true;
@@ -1044,7 +1015,7 @@ static int kinetis_ke_write(struct flash_bank *bank, const uint8_t *buffer,
 		uint32_t old_count = count;
 		count = (old_count | 3) + 1;
 		new_buffer = malloc(count);
-		if (new_buffer == NULL) {
+		if (!new_buffer) {
 			LOG_ERROR("odd number of bytes to write and no memory "
 				"for padding buffer");
 			return ERROR_FAIL;
@@ -1066,7 +1037,7 @@ static int kinetis_ke_write(struct flash_bank *bank, const uint8_t *buffer,
 
 static int kinetis_ke_probe(struct flash_bank *bank)
 {
-	int result, i;
+	int result;
 	uint32_t offset = 0;
 	struct target *target = bank->target;
 	struct kinetis_ke_flash_bank *kinfo = bank->driver_priv;
@@ -1143,15 +1114,12 @@ static int kinetis_ke_probe(struct flash_bank *bank)
 			break;
 	}
 
-	if (bank->sectors) {
-		free(bank->sectors);
-		bank->sectors = NULL;
-	}
+	free(bank->sectors);
 
 	assert(bank->num_sectors > 0);
 	bank->sectors = malloc(sizeof(struct flash_sector) * bank->num_sectors);
 
-	for (i = 0; i < bank->num_sectors; i++) {
+	for (unsigned int i = 0; i < bank->num_sectors; i++) {
 		bank->sectors[i].offset = offset;
 		bank->sectors[i].size = kinfo->sector_size;
 		offset += kinfo->sector_size;
@@ -1172,10 +1140,9 @@ static int kinetis_ke_auto_probe(struct flash_bank *bank)
 	return kinetis_ke_probe(bank);
 }
 
-static int kinetis_ke_info(struct flash_bank *bank, char *buf, int buf_size)
+static int kinetis_ke_info(struct flash_bank *bank, struct command_invocation *cmd)
 {
-	(void) snprintf(buf, buf_size,
-			"%s driver for flash bank %s at " TARGET_ADDR_FMT,
+	command_print_sameline(cmd, "%s driver for flash bank %s at " TARGET_ADDR_FMT,
 			bank->driver->name,	bank->name, bank->base);
 
 	return ERROR_OK;
@@ -1207,9 +1174,7 @@ static int kinetis_ke_blank_check(struct flash_bank *bank)
 
 	if (fstat & (FTMRX_FSTAT_MGSTAT0_MASK | FTMRX_FSTAT_MGSTAT1_MASK)) {
 		/* the whole bank is not erased, check sector-by-sector */
-		int i;
-
-		for (i = 0; i < bank->num_sectors; i++) {
+		for (unsigned int i = 0; i < bank->num_sectors; i++) {
 			FCCOBIX[0] = 0;
 			FCCOBHI[0] = FTMRX_CMD_SECTIONERASED;
 			FCCOBLO[0] = (bank->base + bank->sectors[i].offset) >> 16;
@@ -1229,14 +1194,13 @@ static int kinetis_ke_blank_check(struct flash_bank *bank)
 			if (result == ERROR_OK)	{
 				bank->sectors[i].is_erased = !(fstat & (FTMRX_FSTAT_MGSTAT0_MASK | FTMRX_FSTAT_MGSTAT1_MASK));
 			} else {
-				LOG_DEBUG("Ignoring errored PFlash sector blank-check");
+				LOG_DEBUG("Ignoring error on PFlash sector blank-check");
 				bank->sectors[i].is_erased = -1;
 			}
 		}
 	} else {
 		/* the whole bank is erased, update all sectors */
-		int i;
-		for (i = 0; i < bank->num_sectors; i++)
+		for (unsigned int i = 0; i < bank->num_sectors; i++)
 			bank->sectors[i].is_erased = 1;
 	}
 
@@ -1247,23 +1211,16 @@ static const struct command_registration kinetis_ke_security_command_handlers[] 
 	{
 		.name = "check_security",
 		.mode = COMMAND_EXEC,
-		.help = "",
+		.help = "Check status of device security lock",
 		.usage = "",
 		.handler = kinetis_ke_check_flash_security_status,
 	},
 	{
 		.name = "mass_erase",
 		.mode = COMMAND_EXEC,
-		.help = "",
+		.help = "Issue a complete flash erase via the MDM-AP",
 		.usage = "",
 		.handler = kinetis_ke_mdm_mass_erase,
-	},
-	{
-		.name = "test_securing",
-		.mode = COMMAND_EXEC,
-		.help = "",
-		.usage = "",
-		.handler = kinetis_ke_securing_test,
 	},
 	COMMAND_REGISTRATION_DONE
 };
@@ -1272,7 +1229,7 @@ static const struct command_registration kinetis_ke_exec_command_handlers[] = {
 	{
 		.name = "mdm",
 		.mode = COMMAND_ANY,
-		.help = "",
+		.help = "MDM-AP command group",
 		.usage = "",
 		.chain = kinetis_ke_security_command_handlers,
 	},
@@ -1290,7 +1247,7 @@ static const struct command_registration kinetis_ke_command_handler[] = {
 	{
 		.name = "kinetis_ke",
 		.mode = COMMAND_ANY,
-		.help = "Kinetis KE NAND flash controller commands",
+		.help = "Kinetis KE flash controller commands",
 		.usage = "",
 		.chain = kinetis_ke_exec_command_handlers,
 	},

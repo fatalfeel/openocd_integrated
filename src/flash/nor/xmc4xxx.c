@@ -1,18 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /**************************************************************************
 *   Copyright (C) 2015 Jeff Ciesielski <jeffciesielski@gmail.com>         *
-*                                                                         *
-*   This program is free software; you can redistribute it and/or modify  *
-*   it under the terms of the GNU General Public License as published by  *
-*   the Free Software Foundation; either version 2 of the License, or     *
-*   (at your option) any later version.                                   *
-*                                                                         *
-*   This program is distributed in the hope that it will be useful,       *
-*   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
-*   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
-*   GNU General Public License for more details.                          *
-*                                                                         *
-*   You should have received a copy of the GNU General Public License     *
-*   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
 ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -280,7 +269,7 @@ static int xmc4xxx_load_bank_layout(struct flash_bank *bank)
 
 	/* At this point, we know which flash controller ID we're
 	 * talking to and simply need to fill out the bank structure accordingly */
-	LOG_DEBUG("%d sectors", bank->num_sectors);
+	LOG_DEBUG("%u sectors", bank->num_sectors);
 
 	switch (bank->num_sectors) {
 	case 8:
@@ -296,7 +285,7 @@ static int xmc4xxx_load_bank_layout(struct flash_bank *bank)
 		capacity = sector_capacity_16;
 		break;
 	default:
-		LOG_ERROR("Unexpected number of sectors, %d\n",
+		LOG_ERROR("Unexpected number of sectors, %u\n",
 			  bank->num_sectors);
 		return ERROR_FAIL;
 	}
@@ -307,7 +296,7 @@ static int xmc4xxx_load_bank_layout(struct flash_bank *bank)
 	uint32_t total_offset = 0;
 	bank->sectors = calloc(bank->num_sectors,
 			       sizeof(struct flash_sector));
-	for (int i = 0; i < bank->num_sectors; i++) {
+	for (unsigned int i = 0; i < bank->num_sectors; i++) {
 		bank->sectors[i].size = capacity[i] * 1024;
 		bank->sectors[i].offset = total_offset;
 		bank->sectors[i].is_erased = -1;
@@ -408,7 +397,7 @@ static int xmc4xxx_probe(struct flash_bank *bank)
 }
 
 static int xmc4xxx_get_sector_start_addr(struct flash_bank *bank,
-					 int sector, uint32_t *ret_addr)
+		unsigned int sector, uint32_t *ret_addr)
 {
 	/* Make sure we understand this sector */
 	if (sector > bank->num_sectors)
@@ -538,7 +527,8 @@ static int xmc4xxx_erase_sector(struct flash_bank *bank, uint32_t address,
 	return res;
 }
 
-static int xmc4xxx_erase(struct flash_bank *bank, int first, int last)
+static int xmc4xxx_erase(struct flash_bank *bank, unsigned int first,
+		unsigned int last)
 {
 	struct xmc4xxx_flash_bank *fb = bank->driver_priv;
 	int res;
@@ -556,14 +546,14 @@ static int xmc4xxx_erase(struct flash_bank *bank, int first, int last)
 
 	uint32_t tmp_addr;
 	/* Loop through the sectors and erase each one */
-	for (int i = first; i <= last; i++) {
+	for (unsigned int i = first; i <= last; i++) {
 		res = xmc4xxx_get_sector_start_addr(bank, i, &tmp_addr);
 		if (res != ERROR_OK) {
-			LOG_ERROR("Invalid sector %d", i);
+			LOG_ERROR("Invalid sector %u", i);
 			return res;
 		}
 
-		LOG_DEBUG("Erasing sector %d @ 0x%08"PRIx32, i, tmp_addr);
+		LOG_DEBUG("Erasing sector %u @ 0x%08"PRIx32, i, tmp_addr);
 
 		res = xmc4xxx_erase_sector(bank, tmp_addr, false);
 		if (res != ERROR_OK) {
@@ -576,8 +566,6 @@ static int xmc4xxx_erase(struct flash_bank *bank, int first, int last)
 
 		if (res != ERROR_OK)
 			goto clear_status_and_exit;
-
-		bank->sectors[i].is_erased = 1;
 	}
 
 clear_status_and_exit:
@@ -804,7 +792,7 @@ abort_write_and_exit:
 
 }
 
-static int xmc4xxx_get_info_command(struct flash_bank *bank, char *buf, int buf_size)
+static int xmc4xxx_get_info_command(struct flash_bank *bank, struct command_invocation *cmd)
 {
 	struct xmc4xxx_flash_bank *fb = bank->driver_priv;
 	uint32_t scu_idcode;
@@ -913,9 +901,7 @@ static int xmc4xxx_get_info_command(struct flash_bank *bank, char *buf, int buf_
 		break;
 
 	default:
-		snprintf(buf, buf_size,
-			 "Cannot identify target as an XMC4xxx. SCU_ID: %"PRIx32"\n",
-			 scu_idcode);
+		command_print_sameline(cmd, "Cannot identify target as an XMC4xxx. SCU_ID: %"PRIx32 "\n", scu_idcode);
 		return ERROR_OK;
 	}
 
@@ -925,7 +911,7 @@ static int xmc4xxx_get_info_command(struct flash_bank *bank, char *buf, int buf_
 		snprintf(prot_str, sizeof(prot_str), "\nFlash is read protected");
 
 	bool otp_enabled = false;
-	for (int i = 0; i < bank->num_sectors; i++)
+	for (unsigned int i = 0; i < bank->num_sectors; i++)
 		if (fb->write_prot_otp[i])
 			otp_enabled = true;
 
@@ -934,7 +920,7 @@ static int xmc4xxx_get_info_command(struct flash_bank *bank, char *buf, int buf_
 	char otp_str[14];
 	if (otp_enabled) {
 		strcat(prot_str, "\nOTP Protection is enabled for sectors:\n");
-		for (int i = 0; i < bank->num_sectors; i++) {
+		for (unsigned int i = 0; i < bank->num_sectors; i++) {
 			if (fb->write_prot_otp[i]) {
 				snprintf(otp_str, sizeof(otp_str), "- %d\n", i);
 				strncat(prot_str, otp_str, sizeof(prot_str) - strlen(prot_str) - 1);
@@ -942,12 +928,10 @@ static int xmc4xxx_get_info_command(struct flash_bank *bank, char *buf, int buf_
 		}
 	}
 
-	if (rev_str != NULL)
-		snprintf(buf, buf_size, "%s - Rev: %s%s",
-			 dev_str, rev_str, prot_str);
+	if (rev_str)
+		command_print_sameline(cmd, "%s - Rev: %s%s", dev_str, rev_str, prot_str);
 	else
-		snprintf(buf, buf_size, "%s - Rev: unknown (0x%01x)%s",
-			 dev_str, rev_id, prot_str);
+		command_print_sameline(cmd, "%s - Rev: unknown (0x%01x)%s", dev_str, rev_id, prot_str);
 
 	return ERROR_OK;
 }
@@ -1028,7 +1012,7 @@ static int xmc4xxx_flash_unprotect(struct flash_bank *bank, int32_t level)
 
 /* Reference: "XMC4500 Flash Protection.pptx" app note */
 static int xmc4xxx_flash_protect(struct flash_bank *bank, int level, bool read_protect,
-				 int first, int last)
+		unsigned int first, unsigned int last)
 {
 	/* User configuration block buffers */
 	uint8_t ucp0_buf[8 * sizeof(uint32_t)] = {0};
@@ -1087,7 +1071,7 @@ static int xmc4xxx_flash_protect(struct flash_bank *bank, int level, bool read_p
 
 	/*  We need to fill out the procon register representation
 	 *   that we will be writing to the device */
-	for (int i = first; i <= last; i++)
+	for (unsigned int i = first; i <= last; i++)
 		procon |= 1 << i;
 
 	/* If read protection is requested, set the appropriate bit
@@ -1144,7 +1128,8 @@ static int xmc4xxx_flash_protect(struct flash_bank *bank, int level, bool read_p
 	return ERROR_OK;
 }
 
-static int xmc4xxx_protect(struct flash_bank *bank, int set, int first, int last)
+static int xmc4xxx_protect(struct flash_bank *bank, int set, unsigned int first,
+		unsigned int last)
 {
 	int ret;
 	struct xmc4xxx_flash_bank *fb = bank->driver_priv;
@@ -1193,15 +1178,15 @@ static int xmc4xxx_protect_check(struct flash_bank *bank)
 		return ret;
 	}
 
-	int sectors = bank->num_sectors;
+	unsigned int sectors = bank->num_sectors;
 
-	/* On devices with 12 sectors, sectors 10 & 11 are ptected
+	/* On devices with 12 sectors, sectors 10 & 11 are protected
 	 * together instead of individually */
 	if (sectors == 12)
 		sectors--;
 
 	/* Clear the protection status */
-	for (int i = 0; i < bank->num_sectors; i++) {
+	for (unsigned int i = 0; i < bank->num_sectors; i++) {
 		bank->sectors[i].is_protected = 0;
 		fb->write_prot_otp[i] = false;
 	}
@@ -1214,7 +1199,7 @@ static int xmc4xxx_protect_check(struct flash_bank *bank)
 
 		/* Check for write protection on every available
 		*  sector */
-		for (int j = 0; j < sectors; j++) {
+		for (unsigned int j = 0; j < sectors; j++) {
 			int set = (protection[i] & (1 << j)) ? 1 : 0;
 			bank->sectors[j].is_protected |= set;
 
@@ -1235,7 +1220,7 @@ static int xmc4xxx_protect_check(struct flash_bank *bank)
 		}
 	}
 
-	/* XMC4xxx also supports read proptection, make a note
+	/* XMC4xxx also supports read protection, make a note
 	 * in the private driver structure */
 	if (protection[0] & PROCON_RPRO_MASK)
 		fb->read_protected = true;
@@ -1272,12 +1257,12 @@ COMMAND_HANDLER(xmc4xxx_handle_flash_password_command)
 	errno = 0;
 
 	/* We skip over the flash bank */
-	fb->pw1 = strtol(CMD_ARGV[1], NULL, 16);
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[1], fb->pw1);
 
 	if (errno)
 		return ERROR_COMMAND_SYNTAX_ERROR;
 
-	fb->pw2 = strtol(CMD_ARGV[2], NULL, 16);
+	COMMAND_PARSE_NUMBER(u32, CMD_ARGV[2], fb->pw2);
 
 	if (errno)
 		return ERROR_COMMAND_SYNTAX_ERROR;

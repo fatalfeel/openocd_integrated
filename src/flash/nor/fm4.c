@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /*
  * Spansion FM4 flash
  *
@@ -28,17 +30,17 @@
 #define WDG_LCK (WDG_BASE + 0xC00)
 
 enum fm4_variant {
-	mb9bfx64,
-	mb9bfx65,
-	mb9bfx66,
-	mb9bfx67,
-	mb9bfx68,
+	MB9BFX64,
+	MB9BFX65,
+	MB9BFX66,
+	MB9BFX67,
+	MB9BFX68,
 
-	s6e2cx8,
-	s6e2cx9,
-	s6e2cxa,
+	S6E2CX8,
+	S6E2CX9,
+	S6E2CXA,
 
-	s6e2dx,
+	S6E2DX,
 };
 
 struct fm4_flash_bank {
@@ -98,14 +100,15 @@ static int fm4_enter_flash_cpu_rom_mode(struct target *target)
 	return ERROR_OK;
 }
 
-static int fm4_flash_erase(struct flash_bank *bank, int first, int last)
+static int fm4_flash_erase(struct flash_bank *bank, unsigned int first,
+		unsigned int last)
 {
 	struct target *target = bank->target;
 	struct working_area *workarea;
 	struct reg_param reg_params[4];
 	struct armv7m_algorithm armv7m_algo;
 	unsigned i;
-	int retval, sector;
+	int retval;
 	const uint8_t erase_sector_code[] = {
 #include "../../../contrib/loaders/flash/fm4/erase.inc"
 	};
@@ -115,7 +118,7 @@ static int fm4_flash_erase(struct flash_bank *bank, int first, int last)
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
-	LOG_DEBUG("Spansion FM4 erase sectors %d to %d", first, last);
+	LOG_DEBUG("Spansion FM4 erase sectors %u to %u", first, last);
 
 	retval = fm4_disable_hw_watchdog(target);
 	if (retval != ERROR_OK)
@@ -145,7 +148,7 @@ static int fm4_flash_erase(struct flash_bank *bank, int first, int last)
 	init_reg_param(&reg_params[2], "r2", 32, PARAM_OUT);
 	init_reg_param(&reg_params[3], "r3", 32, PARAM_IN);
 
-	for (sector = first; sector <= last; sector++) {
+	for (unsigned int sector = first; sector <= last; sector++) {
 		uint32_t addr = bank->base + bank->sectors[sector].offset;
 		uint32_t result;
 
@@ -171,13 +174,11 @@ static int fm4_flash_erase(struct flash_bank *bank, int first, int last)
 			retval = ERROR_FLASH_OPERATION_FAILED;
 			goto err_run_ret;
 		} else if (result != 0) {
-			LOG_ERROR("Unexpected error %d from flash sector erase programming algorithm", result);
+			LOG_ERROR("Unexpected error %" PRIu32 " from flash sector erase programming algorithm", result);
 			retval = ERROR_FLASH_OPERATION_FAILED;
 			goto err_run_ret;
 		} else
 			retval = ERROR_OK;
-
-		bank->sectors[sector].is_erased = 1;
 	}
 
 err_run_ret:
@@ -212,7 +213,7 @@ static int fm4_flash_write(struct flash_bank *bank, const uint8_t *buffer,
 #include "../../../contrib/loaders/flash/fm4/write.inc"
 	};
 
-	LOG_DEBUG("Spansion FM4 write at 0x%08" PRIx32 " (%" PRId32 " bytes)",
+	LOG_DEBUG("Spansion FM4 write at 0x%08" PRIx32 " (%" PRIu32 " bytes)",
 		offset, byte_count);
 
 	if (offset & 0x1) {
@@ -221,7 +222,7 @@ static int fm4_flash_write(struct flash_bank *bank, const uint8_t *buffer,
 		return ERROR_FLASH_DST_BREAKS_ALIGNMENT;
 	}
 	if (byte_count & 0x1) {
-		LOG_WARNING("length %" PRId32 " is not 2-byte aligned, rounding up",
+		LOG_WARNING("length %" PRIu32 " is not 2-byte aligned, rounding up",
 			byte_count);
 	}
 
@@ -272,7 +273,7 @@ static int fm4_flash_write(struct flash_bank *bank, const uint8_t *buffer,
 		uint32_t halfwords = MIN(halfword_count, data_workarea->size / 2);
 		uint32_t addr = bank->base + offset;
 
-		LOG_DEBUG("copying %" PRId32 " bytes to SRAM " TARGET_ADDR_FMT,
+		LOG_DEBUG("copying %" PRIu32 " bytes to SRAM " TARGET_ADDR_FMT,
 			MIN(halfwords * 2, byte_count), data_workarea->address);
 
 		retval = target_write_buffer(target, data_workarea->address,
@@ -283,7 +284,7 @@ static int fm4_flash_write(struct flash_bank *bank, const uint8_t *buffer,
 			goto err_write_data;
 		}
 
-		LOG_DEBUG("writing 0x%08" PRIx32 "-0x%08" PRIx32 " (%" PRId32 "x)",
+		LOG_DEBUG("writing 0x%08" PRIx32 "-0x%08" PRIx32 " (%" PRIu32 "x)",
 			addr, addr + halfwords * 2 - 1, halfwords);
 
 		buf_set_u32(reg_params[0].value, 0, 32, (addr & ~0xffff) | 0xAA8);
@@ -311,7 +312,7 @@ static int fm4_flash_write(struct flash_bank *bank, const uint8_t *buffer,
 			retval = ERROR_FLASH_OPERATION_FAILED;
 			goto err_run_ret;
 		} else if (result != 0) {
-			LOG_ERROR("Unexpected error %d from flash write "
+			LOG_ERROR("Unexpected error %" PRIu32 " from flash write "
 				"programming algorithm", result);
 			retval = ERROR_FLASH_OPERATION_FAILED;
 			goto err_run_ret;
@@ -347,32 +348,31 @@ static int mb9bf_probe(struct flash_bank *bank)
 {
 	struct fm4_flash_bank *fm4_bank = bank->driver_priv;
 	uint32_t flash_addr = bank->base;
-	int i;
 
 	switch (fm4_bank->variant) {
-	case mb9bfx64:
+	case MB9BFX64:
 		bank->num_sectors = 8;
 		break;
-	case mb9bfx65:
+	case MB9BFX65:
 		bank->num_sectors = 10;
 		break;
-	case mb9bfx66:
+	case MB9BFX66:
 		bank->num_sectors = 12;
 		break;
-	case mb9bfx67:
+	case MB9BFX67:
 		bank->num_sectors = 16;
 		break;
-	case mb9bfx68:
+	case MB9BFX68:
 		bank->num_sectors = 20;
 		break;
 	default:
 		return ERROR_FLASH_OPER_UNSUPPORTED;
 	}
 
-	LOG_DEBUG("%d sectors", bank->num_sectors);
+	LOG_DEBUG("%u sectors", bank->num_sectors);
 	bank->sectors = calloc(bank->num_sectors,
 				sizeof(struct flash_sector));
-	for (i = 0; i < bank->num_sectors; i++) {
+	for (unsigned int i = 0; i < bank->num_sectors; i++) {
 		if (i < 4)
 			bank->sectors[i].size = 8 * 1024;
 		else if (i == 4)
@@ -409,7 +409,8 @@ static int s6e2cc_probe(struct flash_bank *bank)
 	struct fm4_flash_bank *fm4_bank = bank->driver_priv;
 	uint32_t u32_value;
 	uint32_t flash_addr = bank->base;
-	int i, retval, num_sectors, num_extra_sectors;
+	int retval;
+	unsigned int i, num_extra_sectors, num_sectors;
 
 	retval = target_read_u32(target, DFCTRLR, &u32_value);
 	if (retval != ERROR_OK)
@@ -420,13 +421,13 @@ static int s6e2cc_probe(struct flash_bank *bank)
 	}
 
 	switch (fm4_bank->variant) {
-	case s6e2cx8:
+	case S6E2CX8:
 		num_sectors = (fm4_bank->macro_nr == 0) ? 20 : 0;
 		break;
-	case s6e2cx9:
+	case S6E2CX9:
 		num_sectors = (fm4_bank->macro_nr == 0) ? 20 : 12;
 		break;
-	case s6e2cxa:
+	case S6E2CXA:
 		num_sectors = 20;
 		break;
 	default:
@@ -435,7 +436,7 @@ static int s6e2cc_probe(struct flash_bank *bank)
 	num_extra_sectors = (fm4_bank->macro_nr == 0) ? 1 : 4;
 	bank->num_sectors = num_sectors + num_extra_sectors;
 
-	LOG_DEBUG("%d sectors", bank->num_sectors);
+	LOG_DEBUG("%u sectors", bank->num_sectors);
 	bank->sectors = calloc(bank->num_sectors,
 				sizeof(struct flash_sector));
 	for (i = 0; i < num_sectors; i++) {
@@ -466,12 +467,11 @@ static int s6e2cc_probe(struct flash_bank *bank)
 static int s6e2dh_probe(struct flash_bank *bank)
 {
 	uint32_t flash_addr = bank->base;
-	int i;
 
 	bank->num_sectors = 10;
 	bank->sectors = calloc(bank->num_sectors,
 				sizeof(struct flash_sector));
-	for (i = 0; i < bank->num_sectors; i++) {
+	for (unsigned int i = 0; i < bank->num_sectors; i++) {
 		if (i < 4)
 			bank->sectors[i].size = 8 * 1024;
 		else if (i == 4)
@@ -503,19 +503,19 @@ static int fm4_probe(struct flash_bank *bank)
 	}
 
 	switch (fm4_bank->variant) {
-	case mb9bfx64:
-	case mb9bfx65:
-	case mb9bfx66:
-	case mb9bfx67:
-	case mb9bfx68:
+	case MB9BFX64:
+	case MB9BFX65:
+	case MB9BFX66:
+	case MB9BFX67:
+	case MB9BFX68:
 		retval = mb9bf_probe(bank);
 		break;
-	case s6e2cx8:
-	case s6e2cx9:
-	case s6e2cxa:
+	case S6E2CX8:
+	case S6E2CX9:
+	case S6E2CXA:
 		retval = s6e2cc_probe(bank);
 		break;
-	case s6e2dx:
+	case S6E2DX:
 		retval = s6e2dh_probe(bank);
 		break;
 	default:
@@ -539,7 +539,7 @@ static int fm4_auto_probe(struct flash_bank *bank)
 	return fm4_probe(bank);
 }
 
-static int fm4_get_info_command(struct flash_bank *bank, char *buf, int buf_size)
+static int fm4_get_info_command(struct flash_bank *bank, struct command_invocation *cmd)
 {
 	struct fm4_flash_bank *fm4_bank = bank->driver_priv;
 	const char *name;
@@ -550,31 +550,31 @@ static int fm4_get_info_command(struct flash_bank *bank, char *buf, int buf_size
 	}
 
 	switch (fm4_bank->variant) {
-	case mb9bfx64:
+	case MB9BFX64:
 		name = "MB9BFx64";
 		break;
-	case mb9bfx65:
+	case MB9BFX65:
 		name = "MB9BFx65";
 		break;
-	case mb9bfx66:
+	case MB9BFX66:
 		name = "MB9BFx66";
 		break;
-	case mb9bfx67:
+	case MB9BFX67:
 		name = "MB9BFx67";
 		break;
-	case mb9bfx68:
+	case MB9BFX68:
 		name = "MB9BFx68";
 		break;
-	case s6e2cx8:
+	case S6E2CX8:
 		name = "S6E2Cx8";
 		break;
-	case s6e2cx9:
+	case S6E2CX9:
 		name = "S6E2Cx9";
 		break;
-	case s6e2cxa:
+	case S6E2CXA:
 		name = "S6E2CxA";
 		break;
-	case s6e2dx:
+	case S6E2DX:
 		name = "S6E2Dx";
 		break;
 	default:
@@ -583,14 +583,13 @@ static int fm4_get_info_command(struct flash_bank *bank, char *buf, int buf_size
 	}
 
 	switch (fm4_bank->variant) {
-	case s6e2cx8:
-	case s6e2cx9:
-	case s6e2cxa:
-		snprintf(buf, buf_size, "%s MainFlash Macro #%i",
-			name, fm4_bank->macro_nr);
+	case S6E2CX8:
+	case S6E2CX9:
+	case S6E2CXA:
+		command_print_sameline(cmd, "%s MainFlash Macro #%i", name, fm4_bank->macro_nr);
 		break;
 	default:
-		snprintf(buf, buf_size, "%s MainFlash", name);
+		command_print_sameline(cmd, "%s MainFlash", name);
 		break;
 	}
 
@@ -618,15 +617,15 @@ static int mb9bf_bank_setup(struct flash_bank *bank, const char *variant)
 	struct fm4_flash_bank *fm4_bank = bank->driver_priv;
 
 	if (fm4_name_match(variant, "MB9BFx64")) {
-		fm4_bank->variant = mb9bfx64;
+		fm4_bank->variant = MB9BFX64;
 	} else if (fm4_name_match(variant, "MB9BFx65")) {
-		fm4_bank->variant = mb9bfx65;
+		fm4_bank->variant = MB9BFX65;
 	} else if (fm4_name_match(variant, "MB9BFx66")) {
-		fm4_bank->variant = mb9bfx66;
+		fm4_bank->variant = MB9BFX66;
 	} else if (fm4_name_match(variant, "MB9BFx67")) {
-		fm4_bank->variant = mb9bfx67;
+		fm4_bank->variant = MB9BFX67;
 	} else if (fm4_name_match(variant, "MB9BFx68")) {
-		fm4_bank->variant = mb9bfx68;
+		fm4_bank->variant = MB9BFX68;
 	} else {
 		LOG_WARNING("MB9BF variant %s not recognized.", variant);
 		return ERROR_FLASH_OPER_UNSUPPORTED;
@@ -640,11 +639,11 @@ static int s6e2cc_bank_setup(struct flash_bank *bank, const char *variant)
 	struct fm4_flash_bank *fm4_bank = bank->driver_priv;
 
 	if (fm4_name_match(variant, "S6E2Cx8")) {
-		fm4_bank->variant = s6e2cx8;
+		fm4_bank->variant = S6E2CX8;
 	} else if (fm4_name_match(variant, "S6E2Cx9")) {
-		fm4_bank->variant = s6e2cx9;
+		fm4_bank->variant = S6E2CX9;
 	} else if (fm4_name_match(variant, "S6E2CxA")) {
-		fm4_bank->variant = s6e2cxa;
+		fm4_bank->variant = S6E2CXA;
 	} else {
 		LOG_WARNING("S6E2CC variant %s not recognized.", variant);
 		return ERROR_FLASH_OPER_UNSUPPORTED;
@@ -678,7 +677,7 @@ FLASH_BANK_COMMAND_HANDLER(fm4_flash_bank_command)
 	else if (fm4_name_match(variant, "S6E2Cx"))
 		ret = s6e2cc_bank_setup(bank, variant);
 	else if (fm4_name_match(variant, "S6E2Dx")) {
-		fm4_bank->variant = s6e2dx;
+		fm4_bank->variant = S6E2DX;
 		ret = ERROR_OK;
 	} else {
 		LOG_WARNING("Family %s not recognized.", variant);
@@ -689,24 +688,8 @@ FLASH_BANK_COMMAND_HANDLER(fm4_flash_bank_command)
 	return ret;
 }
 
-static const struct command_registration fm4_exec_command_handlers[] = {
-	COMMAND_REGISTRATION_DONE
-};
-
-static const struct command_registration fm4_command_handlers[] = {
-	{
-		.name = "fm4",
-		.mode = COMMAND_ANY,
-		.help = "fm4 flash command group",
-		.usage = "",
-		.chain = fm4_exec_command_handlers,
-	},
-	COMMAND_REGISTRATION_DONE
-};
-
 const struct flash_driver fm4_flash = {
 	.name = "fm4",
-	.commands = fm4_command_handlers,
 	.flash_bank_command = fm4_flash_bank_command,
 	.info = fm4_get_info_command,
 	.probe = fm4_probe,

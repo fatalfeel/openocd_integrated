@@ -1,19 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /***************************************************************************
  *   Copyright (C) 2009 by                                                 *
  *   Rolf Meeser <rolfm_9dq@yahoo.de>                                      *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -49,8 +38,8 @@
 #define FTCTR           0x2020000C	/* Flash test control */
 #define FBWST           0x20200010	/* Flash bridge wait-state */
 #define FCRA            0x2020001C	/* Flash clock divider */
-#define FMSSTART        0x20200020	/* Flash Built-In Selft Test start address */
-#define FMSSTOP         0x20200024	/* Flash Built-In Selft Test stop address */
+#define FMSSTART        0x20200020	/* Flash Built-In Self Test start address */
+#define FMSSTOP         0x20200024	/* Flash Built-In Self Test stop address */
 #define FMS16           0x20200028	/* Flash 16-bit signature */
 #define FMSW0           0x2020002C	/* Flash 128-bit signature Word 0 */
 #define FMSW1           0x20200030	/* Flash 128-bit signature Word 1 */
@@ -160,7 +149,7 @@ struct lpc2900_flash_bank {
 
 	/**
 	 * Maximum contiguous block of internal SRAM (bytes).
-	 * Autodetected by the driver. Not the total amount of SRAM, only the
+	 * Autodetected by the driver. Not the total amount of SRAM, only
 	 * the largest \em contiguous block!
 	 */
 	uint32_t max_ram_block;
@@ -174,7 +163,7 @@ static uint32_t lpc2900_read_security_status(struct flash_bank *bank);
 static uint32_t lpc2900_run_bist128(struct flash_bank *bank,
 		uint32_t addr_from, uint32_t addr_to,
 		uint32_t signature[4]);
-static uint32_t lpc2900_address2sector(struct flash_bank *bank, uint32_t offset);
+static unsigned int lpc2900_address2sector(struct flash_bank *bank, uint32_t offset);
 static uint32_t lpc2900_calc_tr(uint32_t clock_var, uint32_t time_var);
 
 /***********************  Helper functions  **************************/
@@ -283,9 +272,9 @@ static uint32_t lpc2900_read_security_status(struct flash_bank *bank)
 	 * Anything else is undefined (is_protected = -1). This is treated as
 	 * a protected sector!
 	 */
-	int sector;
-	int index_t;
-	for (sector = 0; sector < bank->num_sectors; sector++) {
+	for (unsigned int sector = 0; sector < bank->num_sectors; sector++) {
+		unsigned int index_t;
+
 		/* Convert logical sector number to physical sector number */
 		if (sector <= 4)
 			index_t = sector + 11;
@@ -356,14 +345,13 @@ static uint32_t lpc2900_run_bist128(struct flash_bank *bank,
  * @param bank Pointer to the flash bank descriptor
  * @param offset Offset address relative to bank start
  */
-static uint32_t lpc2900_address2sector(struct flash_bank *bank,
+static unsigned int lpc2900_address2sector(struct flash_bank *bank,
 	uint32_t offset)
 {
 	uint32_t address = bank->base + offset;
 
 	/* Run through all sectors of this bank */
-	int sector;
-	for (sector = 0; sector < bank->num_sectors; sector++) {
+	for (unsigned int sector = 0; sector < bank->num_sectors; sector++) {
 		/* Return immediately if address is within the current sector */
 		if (address < (bank->sectors[sector].offset + bank->sectors[sector].size))
 			return sector;
@@ -454,8 +442,8 @@ static int lpc2900_write_index_page(struct flash_bank *bank,
 /**
  * Calculate FPTR.TR register value for desired program/erase time.
  *
- * @param clock System clock in Hz
- * @param time Program/erase time in µs
+ * @param clock_var System clock in Hz
+ * @param time_var Program/erase time in µs
  */
 static uint32_t lpc2900_calc_tr(uint32_t clock_var, uint32_t time_var)
 {
@@ -488,7 +476,7 @@ COMMAND_HANDLER(lpc2900_handle_signature_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	if (bank->target->state != TARGET_HALTED) {
@@ -523,7 +511,7 @@ COMMAND_HANDLER(lpc2900_handle_read_custom_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	struct lpc2900_flash_bank *lpc2900_info = bank->driver_priv;
@@ -585,7 +573,7 @@ COMMAND_HANDLER(lpc2900_handle_password_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	struct lpc2900_flash_bank *lpc2900_info = bank->driver_priv;
@@ -615,7 +603,7 @@ COMMAND_HANDLER(lpc2900_handle_write_custom_command)
 
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	struct lpc2900_flash_bank *lpc2900_info = bank->driver_priv;
@@ -636,9 +624,9 @@ COMMAND_HANDLER(lpc2900_handle_write_custom_command)
 
 	/* The image will always start at offset 0 */
 	struct image image;
-	image.base_address_set = 1;
+	image.base_address_set = true;
 	image.base_address = 0;
-	image.start_address_set = 0;
+	image.start_address_set = false;
 
 	const char *filename = CMD_ARGV[1];
 	const char *type = (CMD_ARGC >= 3) ? CMD_ARGV[2] : NULL;
@@ -714,7 +702,7 @@ COMMAND_HANDLER(lpc2900_handle_secure_sector_command)
 	/* Get the bank descriptor */
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	struct lpc2900_flash_bank *lpc2900_info = bank->driver_priv;
@@ -728,9 +716,9 @@ COMMAND_HANDLER(lpc2900_handle_secure_sector_command)
 	lpc2900_info->risky = 0;
 
 	/* Read sector range, and do a sanity check. */
-	int first, last;
-	COMMAND_PARSE_NUMBER(int, CMD_ARGV[1], first);
-	COMMAND_PARSE_NUMBER(int, CMD_ARGV[2], last);
+	unsigned int first, last;
+	COMMAND_PARSE_NUMBER(uint, CMD_ARGV[1], first);
+	COMMAND_PARSE_NUMBER(uint, CMD_ARGV[2], last);
 	if ((first >= bank->num_sectors) ||
 			(last >= bank->num_sectors) ||
 			(first > last)) {
@@ -739,12 +727,11 @@ COMMAND_HANDLER(lpc2900_handle_secure_sector_command)
 	}
 
 	uint8_t page[FLASH_PAGE_SIZE];
-	int sector;
 
 	/* Sectors in page 6 */
 	if ((first <= 4) || (last >= 8)) {
 		memset(&page, 0xff, FLASH_PAGE_SIZE);
-		for (sector = first; sector <= last; sector++) {
+		for (unsigned int sector = first; sector <= last; sector++) {
 			if (sector <= 4)
 				memset(&page[0xB0 + 16*sector], 0, 16);
 			else if (sector >= 8)
@@ -761,7 +748,7 @@ COMMAND_HANDLER(lpc2900_handle_secure_sector_command)
 	/* Sectors in page 7 */
 	if ((first <= 7) && (last >= 5)) {
 		memset(&page, 0xff, FLASH_PAGE_SIZE);
-		for (sector = first; sector <= last; sector++) {
+		for (unsigned int sector = first; sector <= last; sector++) {
 			if ((sector >= 5) && (sector <= 7))
 				memset(&page[0x00 + 16*(sector - 5)], 0, 16);
 		}
@@ -796,7 +783,7 @@ COMMAND_HANDLER(lpc2900_handle_secure_jtag_command)
 	/* Get the bank descriptor */
 	struct flash_bank *bank;
 	int retval = CALL_COMMAND_HANDLER(flash_command_get_bank, 0, &bank);
-	if (ERROR_OK != retval)
+	if (retval != ERROR_OK)
 		return retval;
 
 	struct lpc2900_flash_bank *lpc2900_info = bank->driver_priv;
@@ -945,11 +932,12 @@ FLASH_BANK_COMMAND_HANDLER(lpc2900_flash_bank_command)
  * @param first First sector to be erased
  * @param last Last sector (including) to be erased
  */
-static int lpc2900_erase(struct flash_bank *bank, int first, int last)
+static int lpc2900_erase(struct flash_bank *bank, unsigned int first,
+		unsigned int last)
 {
 	uint32_t status;
-	int sector;
-	int last_unsecured_sector;
+	unsigned int last_unsecured_sector;
+	bool has_unsecured_sector;
 	struct target *target = bank->target;
 	struct lpc2900_flash_bank *lpc2900_info = bank->driver_priv;
 
@@ -959,7 +947,7 @@ static int lpc2900_erase(struct flash_bank *bank, int first, int last)
 		return status;
 
 	/* Sanity check on sector range */
-	if ((first < 0) || (last < first) || (last >= bank->num_sectors)) {
+	if ((last < first) || (last >= bank->num_sectors)) {
 		LOG_INFO("Bad sector range");
 		return ERROR_FLASH_SECTOR_INVALID;
 	}
@@ -974,16 +962,19 @@ static int lpc2900_erase(struct flash_bank *bank, int first, int last)
 	 * a special way.
 	 */
 	last_unsecured_sector = -1;
-	for (sector = first; sector <= last; sector++) {
-		if (!bank->sectors[sector].is_protected)
+	has_unsecured_sector = false;
+	for (unsigned int sector = first; sector <= last; sector++) {
+		if (!bank->sectors[sector].is_protected) {
 			last_unsecured_sector = sector;
+			has_unsecured_sector = true;
+		}
 	}
 
 	/* Exit now, in case of the rare constellation where all sectors in range
 	 * are secured. This is regarded a success, since erasing/programming of
 	 * secured sectors shall be handled transparently.
 	 */
-	if (last_unsecured_sector == -1)
+	if (!has_unsecured_sector)
 		return ERROR_OK;
 
 	/* Enable flash block and set the correct CRA clock of 66 kHz */
@@ -998,7 +989,7 @@ static int lpc2900_erase(struct flash_bank *bank, int first, int last)
 			FLASH_ERASE_TIME));
 
 	/* Sectors are marked for erasure, then erased all together */
-	for (sector = first; sector <= last_unsecured_sector; sector++) {
+	for (unsigned int sector = first; sector <= last_unsecured_sector; sector++) {
 		/* Only mark sectors that aren't secured. Any attempt to erase a group
 		 * of sectors will fail if any single one of them is secured!
 		 */
@@ -1059,7 +1050,6 @@ static int lpc2900_write(struct flash_bank *bank, const uint8_t *buffer,
 	uint32_t num_bytes;
 	struct target *target = bank->target;
 	struct lpc2900_flash_bank *lpc2900_info = bank->driver_priv;
-	int sector;
 	int retval;
 
 	static const uint32_t write_target_code[] = {
@@ -1111,7 +1101,7 @@ static int lpc2900_write(struct flash_bank *bank, const uint8_t *buffer,
 	lpc2900_read_security_status(bank);
 
 	/* Unprotect all involved sectors */
-	for (sector = 0; sector < bank->num_sectors; sector++) {
+	for (unsigned int sector = 0; sector < bank->num_sectors; sector++) {
 		/* Start address in or before this sector?
 		 * End address in or behind this sector? */
 		if (((bank->base + offset) <
@@ -1179,7 +1169,7 @@ static int lpc2900_write(struct flash_bank *bank, const uint8_t *buffer,
 		while (count != 0) {
 			uint32_t this_npages;
 			const uint8_t *this_buffer;
-			int start_sector = lpc2900_address2sector(bank, offset);
+			unsigned int start_sector = lpc2900_address2sector(bank, offset);
 
 			/* First page / last page / rest */
 			if (offset % FLASH_PAGE_SIZE) {
@@ -1208,7 +1198,7 @@ static int lpc2900_write(struct flash_bank *bank, const uint8_t *buffer,
 				this_buffer = buffer;
 
 				/* Make sure we stop at the next secured sector */
-				sector = start_sector + 1;
+				unsigned int sector = start_sector + 1;
 				while (sector < bank->num_sectors) {
 					/* Secured? */
 					if (bank->sectors[sector].is_protected) {
@@ -1230,7 +1220,7 @@ static int lpc2900_write(struct flash_bank *bank, const uint8_t *buffer,
 
 			/* Skip the current sector if it is secured */
 			if (bank->sectors[start_sector].is_protected) {
-				LOG_DEBUG("Skip secured sector %d",
+				LOG_DEBUG("Skip secured sector %u",
 					start_sector);
 
 				/* Stop if this is the last sector */
@@ -1371,7 +1361,6 @@ static int lpc2900_probe(struct flash_bank *bank)
 {
 	struct lpc2900_flash_bank *lpc2900_info = bank->driver_priv;
 	struct target *target = bank->target;
-	int i = 0;
 	uint32_t offset;
 
 
@@ -1467,8 +1456,8 @@ static int lpc2900_probe(struct flash_bank *bank)
 	}
 
 	/* Show detected device */
-	LOG_INFO("Flash bank %d: Device %s, %" PRIu32
-		" KiB in %d sectors",
+	LOG_INFO("Flash bank %u: Device %s, %" PRIu32
+		" KiB in %u sectors",
 		bank->bank_number,
 		lpc2900_info->target_name, bank->size / KiB,
 		bank->num_sectors);
@@ -1487,7 +1476,7 @@ static int lpc2900_probe(struct flash_bank *bank)
 	bank->sectors = malloc(sizeof(struct flash_sector) * bank->num_sectors);
 
 	offset = 0;
-	for (i = 0; i < bank->num_sectors; i++) {
+	for (unsigned int i = 0; i < bank->num_sectors; i++) {
 		bank->sectors[i].offset = offset;
 		bank->sectors[i].is_erased = -1;
 		bank->sectors[i].is_protected = -1;
@@ -1501,7 +1490,7 @@ static int lpc2900_probe(struct flash_bank *bank)
 			 * that has more than 19 sectors. Politely ask for a fix then.
 			 */
 			bank->sectors[i].size = 0;
-			LOG_ERROR("Never heard about sector %d", i);
+			LOG_ERROR("Never heard about sector %u", i);
 		}
 
 		offset += bank->sectors[i].size;
@@ -1535,11 +1524,10 @@ static int lpc2900_erase_check(struct flash_bank *bank)
 		return status;
 	}
 
-	/* Use the BIST (Built-In Selft Test) to generate a signature of each flash
+	/* Use the BIST (Built-In Self Test) to generate a signature of each flash
 	 * sector. Compare against the expected signature of an empty sector.
 	 */
-	int sector;
-	for (sector = 0; sector < bank->num_sectors; sector++) {
+	for (unsigned int sector = 0; sector < bank->num_sectors; sector++) {
 		uint32_t signature[4];
 		status = lpc2900_run_bist128(bank, bank->sectors[sector].offset,
 				bank->sectors[sector].offset + (bank->sectors[sector].size - 1), signature);

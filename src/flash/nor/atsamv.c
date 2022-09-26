@@ -1,63 +1,22 @@
-/***************************************************************************
- *   Copyright (C) 2009 by Duane Ellis                                     *
- *   openocd@duaneellis.com                                                *
- *                                                                         *
- *   Copyright (C) 2010 by Olaf Lüke (at91sam3s* support)                  *
- *   olaf@uni-paderborn.de                                                 *
- *                                                                         *
- *   Copyright (C) 2011 by Olivier Schonken, Jim Norris                    *
- *   (at91sam3x* & at91sam4 support)*                                      *
- *                                                                         *
- *   Copyright (C) 2015 Morgan Quigley                                     *
- *   (atsamv, atsams, and atsame support)                                  *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
- ***************************************************************************/
+// SPDX-License-Identifier: (GPL-2.0-or-later OR BSD-Source-Code)
 
-/* Some of the the lower level code was based on code supplied by
- * ATMEL under this copyright. */
-
-/* BEGIN ATMEL COPYRIGHT */
-/* ----------------------------------------------------------------------------
- *         ATMEL Microcontroller Software Support
- * ----------------------------------------------------------------------------
- * Copyright (c) 2009, Atmel Corporation
+/*
+ * Copyright (C) 2009 by Duane Ellis <openocd@duaneellis.com>
  *
- * All rights reserved.
+ * at91sam3s* support
+ * Copyright (C) 2010 by Olaf Lüke <olaf@uni-paderborn.de>
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
+ * at91sam3x* & at91sam4 support
+ * Copyright (C) 2011 by Olivier Schonken and Jim Norris
  *
- * - Redistributions of source code must retain the above copyright notice,
- * this list of conditions and the disclaimer below.
+ * atsamv, atsams, and atsame support
+ * Copyright (C) 2015 Morgan Quigley
  *
- * Atmel's name may not be used to endorse or promote products derived from
- * this software without specific prior written permission.
- *
- * DISCLAIMER: THIS SOFTWARE IS PROVIDED BY ATMEL "AS IS" AND ANY EXPRESS OR
- * IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT ARE
- * DISCLAIMED. IN NO EVENT SHALL ATMEL BE LIABLE FOR ANY DIRECT, INDIRECT,
- * INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
- * LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA,
- * OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
- * LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE,
- * EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- * ----------------------------------------------------------------------------
+ * Some of the lower level code was based on code supplied by
+ * ATMEL under BSD-Source-Code License and this copyright.
+ * ATMEL Microcontroller Software Support
+ * Copyright (c) 2009, Atmel Corporation. All rights reserved.
  */
-/* END ATMEL COPYRIGHT */
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -97,7 +56,7 @@
 extern const struct flash_driver atsamv_flash;
 
 struct samv_flash_bank {
-	int      probed;
+	bool      probed;
 	unsigned size_bytes;
 	unsigned gpnvm[SAMV_NUM_GPNVM_BITS];
 };
@@ -328,7 +287,7 @@ static int samv_protect_check(struct flash_bank *bank)
 	if (r != ERROR_OK)
 		return r;
 
-	for (int x = 0; x < bank->num_sectors; x++)
+	for (unsigned int x = 0; x < bank->num_sectors; x++)
 		bank->sectors[x].is_protected = (!!(v[x >> 5] & (1 << (x % 32))));
 	return ERROR_OK;
 }
@@ -379,12 +338,12 @@ static int samv_probe(struct flash_bank *bank)
 
 	struct samv_flash_bank *samv_info = bank->driver_priv;
 	samv_info->size_bytes = bank->size;
-	samv_info->probed = 1;
+	samv_info->probed = true;
 
 	bank->base = SAMV_FLASH_BASE;
 	bank->num_sectors = bank->size / SAMV_SECTOR_SIZE;
 	bank->sectors = calloc(bank->num_sectors, sizeof(struct flash_sector));
-	for (int s = 0; s < (int)bank->num_sectors; s++) {
+	for (unsigned int s = 0; s < bank->num_sectors; s++) {
 		bank->sectors[s].size = SAMV_SECTOR_SIZE;
 		bank->sectors[s].offset = s * SAMV_SECTOR_SIZE;
 		bank->sectors[s].is_erased = -1;
@@ -406,7 +365,8 @@ static int samv_auto_probe(struct flash_bank *bank)
 	return samv_probe(bank);
 }
 
-static int samv_erase(struct flash_bank *bank, int first, int last)
+static int samv_erase(struct flash_bank *bank, unsigned int first,
+		unsigned int last)
 {
 	const int page_count = 32; /* 32 pages equals 16 KB lock region */
 
@@ -420,31 +380,31 @@ static int samv_erase(struct flash_bank *bank, int first, int last)
 		return r;
 
 	/* easy case: we've been requested to erase the entire flash */
-	if ((first == 0) && ((last + 1) == (int)(bank->num_sectors)))
+	if ((first == 0) && ((last + 1) == bank->num_sectors))
 		return samv_efc_perform_command(bank->target, SAMV_EFC_FCMD_EA, 0, NULL);
 
-	LOG_INFO("erasing lock regions %d-%d...", first, last);
+	LOG_INFO("erasing lock regions %u-%u...", first, last);
 
-	for (int i = first; i <= last; i++) {
+	for (unsigned int i = first; i <= last; i++) {
 		uint32_t status;
 		r = samv_erase_pages(bank->target, (i * page_count), page_count, &status);
-		LOG_INFO("erasing lock region %d", i);
+		LOG_INFO("erasing lock region %u", i);
 		if (r != ERROR_OK)
-			LOG_ERROR("error performing erase page @ lock region number %d",
-					(unsigned int)(i));
+			LOG_ERROR("error performing erase page @ lock region number %u", i);
 		if (status & (1 << 2)) {
-			LOG_ERROR("lock region %d is locked", (unsigned int)(i));
+			LOG_ERROR("lock region %u is locked", i);
 			return ERROR_FAIL;
 		}
 		if (status & (1 << 1)) {
-			LOG_ERROR("flash command error @lock region %d", (unsigned int)(i));
+			LOG_ERROR("flash command error @lock region %u", i);
 			return ERROR_FAIL;
 		}
 	}
 	return ERROR_OK;
 }
 
-static int samv_protect(struct flash_bank *bank, int set, int first, int last)
+static int samv_protect(struct flash_bank *bank, int set, unsigned int first,
+		unsigned int last)
 {
 	if (bank->target->state != TARGET_HALTED) {
 		LOG_ERROR("Target not halted");
@@ -453,9 +413,9 @@ static int samv_protect(struct flash_bank *bank, int set, int first, int last)
 
 	int r;
 	if (set)
-		r = samv_flash_lock(bank->target, (unsigned)(first), (unsigned)(last));
+		r = samv_flash_lock(bank->target, first, last);
 	else
-		r = samv_flash_unlock(bank->target, (unsigned)(first), (unsigned)(last));
+		r = samv_flash_unlock(bank->target, first, last);
 
 	return r;
 }
@@ -606,15 +566,15 @@ static int samv_write(struct flash_bank *bank, const uint8_t *buffer,
 	return ERROR_OK;
 }
 
-static int samv_get_info(struct flash_bank *bank, char *buf, int buf_size)
+static int samv_get_info(struct flash_bank *bank, struct command_invocation *cmd)
 {
 	struct samv_flash_bank *samv_info = bank->driver_priv;
 	if (!samv_info->probed) {
 		int r = samv_probe(bank);
-		if (ERROR_OK != r)
+		if (r != ERROR_OK)
 			return r;
 	}
-	snprintf(buf, buf_size, "Cortex-M7 detected with %d kB flash",
+	command_print_sameline(cmd, "Cortex-M7 detected with %" PRIu32 " kB flash\n",
 			bank->size / 1024);
 	return ERROR_OK;
 }
@@ -660,7 +620,7 @@ COMMAND_HANDLER(samv_handle_gpnvm_command)
 			return ERROR_COMMAND_SYNTAX_ERROR;
 	}
 
-	uint32_t v;
+	unsigned v = 0;
 	if (!strcmp("show", CMD_ARGV[0])) {
 		if (who == -1) {
 showall:
@@ -675,6 +635,9 @@ showall:
 		}
 		if ((who >= 0) && (((unsigned)who) < SAMV_NUM_GPNVM_BITS)) {
 			r = samv_get_gpnvm(target, who, &v);
+			if (r != ERROR_OK)
+				return r;
+
 			command_print(CMD, "samv-gpnvm%u: %u", who, v);
 			return r;
 		} else {

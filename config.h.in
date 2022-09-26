@@ -3,8 +3,11 @@
 /* Define if building universal (internal helper macro) */
 #undef AC_APPLE_UNIVERSAL_BUILD
 
-/* 0 if you do not want the Andes JTAG Programmer. */
+/* 0 if you do not want the Andes JTAG Programmer (deprecated). */
 #undef BUILD_AICE
+
+/* 0 if you don't want am335xgpio. */
+#undef BUILD_AM335XGPIO
 
 /* 0 if you don't want the Amontec JTAG-Accelerator driver. */
 #undef BUILD_AMTJTAGACCEL
@@ -22,13 +25,19 @@
 #undef BUILD_BUSPIRATE
 
 /* 0 if you do not want the CMSIS-DAP Compliant Debugger. */
-#undef BUILD_CMSIS_DAP
+#undef BUILD_CMSIS_DAP_HID
+
+/* 0 if you do not want the CMSIS-DAP v2 Compliant Debugger. */
+#undef BUILD_CMSIS_DAP_USB
 
 /* 0 if you don't want dummy driver. */
 #undef BUILD_DUMMY
 
 /* 0 if you don't want ep93xx. */
 #undef BUILD_EP93XX
+
+/* 0 if you do not want the Espressif JTAG Programmer. */
+#undef BUILD_ESP_USB_JTAG
 
 /* 0 if you do not want the Bitbang mode of FT232R based devices. */
 #undef BUILD_FT232R
@@ -45,6 +54,9 @@
 /* 0 if you do not want the TI ICDI JTAG Programmer. */
 #undef BUILD_HLADAPTER_ICDI
 
+/* 0 if you do not want the Nu-Link Programmer. */
+#undef BUILD_HLADAPTER_NULINK
+
 /* 0 if you do not want the ST-Link Programmer. */
 #undef BUILD_HLADAPTER_STLINK
 
@@ -54,17 +66,17 @@
 /* 0 if you do not want the SEGGER J-Link Programmer. */
 #undef BUILD_JLINK
 
+/* 0 if you don't want JTAG DPI. */
+#undef BUILD_JTAG_DPI
+
 /* 0 if you don't want JTAG VPI. */
 #undef BUILD_JTAG_VPI
 
 /* 0 if you do not want the Cypress KitProg Programmer. */
 #undef BUILD_KITPROG
 
-/* Use the dummy minidriver. */
-#undef BUILD_MINIDRIVER_DUMMY
-
-/* 0 if you don't want the OpenOCD+trace ETM capture driver. */
-#undef BUILD_OOCD_TRACE
+/* 0 if you do not want the Linux GPIO bitbang through libgpiod. */
+#undef BUILD_LINUXGPIOD
 
 /* 0 if you do not want the eStick/opendous JTAG Programmer. */
 #undef BUILD_OPENDOUS
@@ -105,6 +117,9 @@
 /* 0 if you do not want the Altera USB-Blaster II Compatible. */
 #undef BUILD_USB_BLASTER_2
 
+/* 0 if you don't want Cadence vdebug interface. */
+#undef BUILD_VDEBUG
+
 /* 0 if you do not want the Versaloon-Link JTAG Programmer. */
 #undef BUILD_VSLLINK
 
@@ -114,20 +129,17 @@
 /* 0 if you don't want Xilinx XVC/PCIe driver. */
 #undef BUILD_XLNX_PCIE_XVC
 
-/* 0 if you don't want ZY1000. */
-#undef BUILD_ZY1000
-
-/* 0 if you don't want ZY1000 JTAG master registers. */
-#undef BUILD_ZY1000_MASTER
-
 /* Define to 1 if you have the <arpa/inet.h> header file. */
 #undef HAVE_ARPA_INET_H
 
-/* Define to 1 if you have the <dirent.h> header file. */
-#undef HAVE_DIRENT_H
+/* 1 if you have Capstone disassembly framework. */
+#undef HAVE_CAPSTONE
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #undef HAVE_DLFCN_H
+
+/* Define to 1 if the system has the type `Elf64_Ehdr'. */
+#undef HAVE_ELF64
 
 /* Define to 1 if you have the <elf.h> header file. */
 #undef HAVE_ELF_H
@@ -138,20 +150,14 @@
 /* Define to 1 if you have the `gettimeofday' function. */
 #undef HAVE_GETTIMEOFDAY
 
-/* Define to 1 if you have the <ifaddrs.h> header file. */
-#undef HAVE_IFADDRS_H
-
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
-/* Define to 1 if you have the <jtag_minidriver.h> header file. */
-#undef HAVE_JTAG_MINIDRIVER_H
+/* Define if your libftdi has ftdi_tcioflush() */
+#undef HAVE_LIBFTDI_TCIOFLUSH
 
 /* Define if you have libusb-1.x */
 #undef HAVE_LIBUSB1
-
-/* Define if your libusb has libusb_error_name() */
-#undef HAVE_LIBUSB_ERROR_NAME
 
 /* Define if your libusb has libusb_get_port_numbers() */
 #undef HAVE_LIBUSB_GET_PORT_NUMBERS
@@ -174,14 +180,8 @@
 /* Define to 1 if you have the <netinet/tcp.h> header file. */
 #undef HAVE_NETINET_TCP_H
 
-/* Define to 1 if you have the <net/if.h> header file. */
-#undef HAVE_NET_IF_H
-
 /* Define to 1 if you have the <poll.h> header file. */
 #undef HAVE_POLL_H
-
-/* Define to 1 if you have the <pthread.h> header file. */
-#undef HAVE_PTHREAD_H
 
 /* Define to 1 if you have the `realpath' function. */
 #undef HAVE_REALPATH
@@ -243,9 +243,6 @@
 /* Define to 1 if you have the `usleep' function. */
 #undef HAVE_USLEEP
 
-/* Define to 1 if you have the `vasprintf' function. */
-#undef HAVE_VASPRINTF
-
 /* Define to 1 if the system has the type `_Bool'. */
 #undef HAVE__BOOL
 
@@ -300,9 +297,6 @@
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS
 
-/* Define to 1 if you can safely include both <sys/time.h> and <time.h>. */
-#undef TIME_WITH_SYS_TIME
-
 /* Version number of package */
 #undef VERSION
 
@@ -332,9 +326,3 @@
 
 /* Define to empty if `const' does not conform to ANSI C. */
 #undef const
-
-
-#include <helper/system.h>
-#include <helper/types.h>
-#include <helper/replacements.h>
-

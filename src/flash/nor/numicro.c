@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /***************************************************************************
  *   Copyright (C) 2011 by James K. Larson                                 *
  *   jlarson@pacifier.com                                                  *
@@ -10,19 +12,6 @@
  *                                                                         *
  *   Copyright (C) 2015 Nemui Trinomius                                    *
  *   nemuisan_kawausogasuki@live.jp                                        *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -151,7 +140,7 @@ struct numicro_cpu_type {
 	{NUMICRO_CONFIG_BASE, 1024} }
 
 
-static const struct numicro_cpu_type NuMicroParts[] = {
+static const struct numicro_cpu_type numicro_parts[] = {
 	/*PART NO*/     /*PART ID*/ /*Banks*/
 	/* NUC100 Version B */
 	{"NUC100LD2BN", 0x10010004, NUMICRO_BANKS_NUC100(64*1024)},
@@ -1132,7 +1121,7 @@ static const struct numicro_cpu_type NuMicroParts[] = {
 /* Private bank information for NuMicro. */
 struct  numicro_flash_bank {
 	struct working_area *write_algorithm;
-	int probed;
+	bool probed;
 	const struct numicro_cpu_type *cpu;
 };
 
@@ -1243,7 +1232,7 @@ static uint32_t numicro_fmc_cmd(struct target *target, uint32_t cmd, uint32_t ad
 		retval = target_read_u32(target, NUMICRO_FLASH_ISPTRG, &status);
 		if (retval != ERROR_OK)
 			return retval;
-			LOG_DEBUG("status: 0x%" PRIx32 "", status);
+		LOG_DEBUG("status: 0x%" PRIx32 "", status);
 		if ((status & (ISPTRG_ISPGO)) == 0)
 			break;
 		if (timeout-- <= 0) {
@@ -1385,13 +1374,6 @@ static int numicro_writeblock(struct flash_bank *bank, const uint8_t *buffer,
 	init_reg_param(&reg_params[1], "r1", 32, PARAM_OUT);    /* faddr */
 	init_reg_param(&reg_params[2], "r2", 32, PARAM_OUT);    /* number of words to program */
 
-	struct armv7m_common *armv7m = target_to_armv7m(target);
-	if (armv7m == NULL) {
-		/* something is very wrong if armv7m is NULL */
-		LOG_ERROR("unable to get armv7m target");
-		return retval;
-	}
-
 	/* write code buffer and use Flash programming code within NuMicro     */
 	/* Set breakpoint to 0 with time-out of 1000 ms                        */
 	while (count > 0) {
@@ -1433,7 +1415,7 @@ static int numicro_protect_check(struct flash_bank *bank)
 {
 	struct target *target = bank->target;
 	uint32_t set, config[2];
-	int i, retval = ERROR_OK;
+	int retval = ERROR_OK;
 
 	if (target->state != TARGET_HALTED) {
 		LOG_ERROR("Target not halted");
@@ -1467,25 +1449,26 @@ static int numicro_protect_check(struct flash_bank *bank)
 	    set = 0;
 	}
 
-	for (i = 0; i < bank->num_sectors; i++)
+	for (unsigned int i = 0; i < bank->num_sectors; i++)
 		bank->sectors[i].is_protected = set;
 
 	return ERROR_OK;
 }
 
 
-static int numicro_erase(struct flash_bank *bank, int first, int last)
+static int numicro_erase(struct flash_bank *bank, unsigned int first,
+		unsigned int last)
 {
 	struct target *target = bank->target;
 	uint32_t timeout, status;
-	int i, retval = ERROR_OK;
+	int retval = ERROR_OK;
 
 	if (target->state != TARGET_HALTED) {
 		LOG_ERROR("Target not halted");
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
-	LOG_INFO("Nuvoton NuMicro: Sector Erase ... (%d to %d)", first, last);
+	LOG_INFO("Nuvoton NuMicro: Sector Erase ... (%u to %u)", first, last);
 
 	retval = numicro_init_isp(target);
 	if (retval != ERROR_OK)
@@ -1495,8 +1478,8 @@ static int numicro_erase(struct flash_bank *bank, int first, int last)
 	if (retval != ERROR_OK)
 		return retval;
 
-	for (i = first; i <= last; i++) {
-		LOG_DEBUG("erasing sector %d at address " TARGET_ADDR_FMT, i,
+	for (unsigned int i = first; i <= last; i++) {
+		LOG_DEBUG("erasing sector %u at address " TARGET_ADDR_FMT, i,
 				bank->base + bank->sectors[i].offset);
 		retval = target_write_u32(target, NUMICRO_FLASH_ISPADR, bank->base + bank->sectors[i].offset);
 		if (retval != ERROR_OK)
@@ -1511,7 +1494,7 @@ static int numicro_erase(struct flash_bank *bank, int first, int last)
 			retval = target_read_u32(target, NUMICRO_FLASH_ISPTRG, &status);
 			if (retval != ERROR_OK)
 				return retval;
-				LOG_DEBUG("status: 0x%" PRIx32 "", status);
+			LOG_DEBUG("status: 0x%" PRIx32 "", status);
 			if (status == 0)
 				break;
 			if (timeout-- <= 0) {
@@ -1531,8 +1514,6 @@ static int numicro_erase(struct flash_bank *bank, int first, int last)
 			retval = target_write_u32(target, NUMICRO_FLASH_ISPCON, (status | ISPCON_ISPFF));
 			if (retval != ERROR_OK)
 				return retval;
-		} else {
-			bank->sectors[i].is_erased = 1;
 		}
 	}
 
@@ -1582,7 +1563,7 @@ static int numicro_write(struct flash_bank *bank, const uint8_t *buffer,
 		/* program command */
 		for (uint32_t i = 0; i < count; i += 4) {
 
-			LOG_DEBUG("write longword @ %08X", offset + i);
+			LOG_DEBUG("write longword @ %08" PRIX32, offset + i);
 
 			retval = target_write_u32(target, NUMICRO_FLASH_ISPADR, bank->base + offset + i);
 			if (retval != ERROR_OK)
@@ -1600,7 +1581,7 @@ static int numicro_write(struct flash_bank *bank, const uint8_t *buffer,
 				retval = target_read_u32(target, NUMICRO_FLASH_ISPTRG, &status);
 				if (retval != ERROR_OK)
 					return retval;
-					LOG_DEBUG("status: 0x%" PRIx32 "", status);
+				LOG_DEBUG("status: 0x%" PRIx32 "", status);
 				if (status == 0)
 					break;
 				if (timeout-- <= 0) {
@@ -1647,9 +1628,9 @@ static int numicro_get_cpu_type(struct target *target, const struct numicro_cpu_
 
 	LOG_INFO("Device ID: 0x%08" PRIx32 "", part_id);
 	/* search part numbers */
-	for (size_t i = 0; i < ARRAY_SIZE(NuMicroParts); i++) {
-		if (part_id == NuMicroParts[i].partid) {
-			*cpu = &NuMicroParts[i];
+	for (size_t i = 0; i < ARRAY_SIZE(numicro_parts); i++) {
+		if (part_id == numicro_parts[i].partid) {
+			*cpu = &numicro_parts[i];
 			LOG_INFO("Device Name: %s", (*cpu)->partname);
 			return ERROR_OK;
 		}

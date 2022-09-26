@@ -1,19 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /***************************************************************************
  *   Copyright (C) 2006 by Dominic Rath                                    *
  *   Dominic.Rath@gmx.de                                                   *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -25,7 +14,7 @@
 #include <helper/log.h>
 
 #include <sys/stat.h>
-
+#include <helper/system.h>
 
 static int read_section(FILE *input_file, int length_size, char section,
 	uint32_t *buffer_length, uint8_t **buffer)
@@ -93,7 +82,7 @@ int xilinx_read_bit_file(struct xilinx_bit_file *bit_file, const char *filename)
 	}
 
 	input_file = fopen(filename, "rb");
-	if (input_file == NULL) {
+	if (!input_file) {
 		LOG_ERROR("couldn't open %s: %s", filename, strerror(errno));
 		return ERROR_PLD_FILE_LOAD_FAILED;
 	}
@@ -119,7 +108,7 @@ int xilinx_read_bit_file(struct xilinx_bit_file *bit_file, const char *filename)
 	if (read_section(input_file, 4, 'e', &bit_file->length, &bit_file->data) != ERROR_OK)
 		return ERROR_PLD_FILE_LOAD_FAILED;
 
-	LOG_DEBUG("bit_file: %s %s %s,%s %" PRIi32 "", bit_file->source_file, bit_file->part_name,
+	LOG_DEBUG("bit_file: %s %s %s,%s %" PRIu32 "", bit_file->source_file, bit_file->part_name,
 		bit_file->date, bit_file->time, bit_file->length);
 
 	fclose(input_file);

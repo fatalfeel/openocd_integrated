@@ -1,9 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /*
  * XMC1000 flash driver
  *
  * Copyright (c) 2016 Andreas Färber
- *
- * License: GPL-2.0+
  */
 
 #ifdef HAVE_CONFIG_H
@@ -11,6 +11,7 @@
 #endif
 
 #include "imp.h"
+#include <helper/align.h>
 #include <helper/binarybuffer.h>
 #include <target/algorithm.h>
 #include <target/armv7m.h>
@@ -76,19 +77,20 @@ static int xmc1xxx_nvm_check_idle(struct target *target)
 	return retval;
 }
 
-static int xmc1xxx_erase(struct flash_bank *bank, int first, int last)
+static int xmc1xxx_erase(struct flash_bank *bank, unsigned int first,
+		unsigned int last)
 {
 	struct target *target = bank->target;
 	struct working_area *workarea;
 	struct reg_param reg_params[3];
 	struct armv7m_algorithm armv7m_algo;
 	unsigned i;
-	int retval, sector;
+	int retval;
 	const uint8_t erase_code[] = {
 #include "../../../contrib/loaders/flash/xmc1xxx/erase.inc"
 	};
 
-	LOG_DEBUG("Infineon XMC1000 erase sectors %d to %d", first, last);
+	LOG_DEBUG("Infineon XMC1000 erase sectors %u to %u", first, last);
 
 	if (bank->target->state != TARGET_HALTED) {
 		LOG_WARNING("Cannot communicate... target not halted.");
@@ -139,9 +141,6 @@ static int xmc1xxx_erase(struct flash_bank *bank, int first, int last)
 		goto err_run;
 	}
 
-	for (sector = first; sector <= last; sector++)
-		bank->sectors[sector].is_erased = 1;
-
 err_run:
 	for (i = 0; i < ARRAY_SIZE(reg_params); i++)
 		destroy_reg_param(&reg_params[i]);
@@ -161,7 +160,7 @@ static int xmc1xxx_erase_check(struct flash_bank *bank)
 	struct armv7m_algorithm armv7m_algo;
 	uint16_t val;
 	unsigned i;
-	int retval, sector;
+	int retval;
 	const uint8_t erase_check_code[] = {
 #include "../../../contrib/loaders/flash/xmc1xxx/erase_check.inc"
 	};
@@ -192,7 +191,7 @@ static int xmc1xxx_erase_check(struct flash_bank *bank)
 
 	buf_set_u32(reg_params[0].value, 0, 32, NVM_BASE);
 
-	for (sector = 0; sector < bank->num_sectors; sector++) {
+	for (unsigned int sector = 0; sector < bank->num_sectors; sector++) {
 		uint32_t start = bank->base + bank->sectors[sector].offset;
 		buf_set_u32(reg_params[1].value, 0, 32, start);
 		buf_set_u32(reg_params[2].value, 0, 32, start + bank->sectors[sector].size);
@@ -252,16 +251,16 @@ static int xmc1xxx_write(struct flash_bank *bank, const uint8_t *buffer,
 #include "../../../contrib/loaders/flash/xmc1xxx/write.inc"
 	};
 
-	LOG_DEBUG("Infineon XMC1000 write at 0x%08" PRIx32 " (%" PRId32 " bytes)",
+	LOG_DEBUG("Infineon XMC1000 write at 0x%08" PRIx32 " (%" PRIu32 " bytes)",
 		offset, byte_count);
 
-	if (offset & (NVM_BLOCK_SIZE - 1)) {
+	if (!IS_ALIGNED(offset, NVM_BLOCK_SIZE)) {
 		LOG_ERROR("offset 0x%" PRIx32 " breaks required block alignment",
 			offset);
 		return ERROR_FLASH_DST_BREAKS_ALIGNMENT;
 	}
-	if (byte_count & (NVM_BLOCK_SIZE - 1)) {
-		LOG_WARNING("length %" PRId32 " is not block aligned, rounding up",
+	if (!IS_ALIGNED(byte_count, NVM_BLOCK_SIZE)) {
+		LOG_WARNING("length %" PRIu32 " is not block aligned, rounding up",
 			byte_count);
 	}
 
@@ -305,7 +304,7 @@ static int xmc1xxx_write(struct flash_bank *bank, const uint8_t *buffer,
 		uint32_t blocks = MIN(block_count, data_workarea->size / NVM_BLOCK_SIZE);
 		uint32_t addr = bank->base + offset;
 
-		LOG_DEBUG("copying %" PRId32 " bytes to SRAM " TARGET_ADDR_FMT,
+		LOG_DEBUG("copying %" PRIu32 " bytes to SRAM " TARGET_ADDR_FMT,
 			MIN(blocks * NVM_BLOCK_SIZE, byte_count),
 			data_workarea->address);
 
@@ -328,7 +327,7 @@ static int xmc1xxx_write(struct flash_bank *bank, const uint8_t *buffer,
 			}
 		}
 
-		LOG_DEBUG("writing 0x%08" PRIx32 "-0x%08" PRIx32 " (%" PRId32 "x)",
+		LOG_DEBUG("writing 0x%08" PRIx32 "-0x%08" PRIx32 " (%" PRIu32 "x)",
 			addr, addr + blocks * NVM_BLOCK_SIZE - 1, blocks);
 
 		retval = xmc1xxx_nvm_check_idle(target);
@@ -379,7 +378,8 @@ err_alloc_code:
 static int xmc1xxx_protect_check(struct flash_bank *bank)
 {
 	uint32_t nvmconf;
-	int i, num_protected, retval;
+	unsigned int num_protected;
+	int retval;
 
 	if (bank->target->state != TARGET_HALTED) {
 		LOG_WARNING("Cannot communicate... target not halted.");
@@ -395,13 +395,13 @@ static int xmc1xxx_protect_check(struct flash_bank *bank)
 
 	num_protected = (nvmconf >> 4) & 0xff;
 
-	for (i = 0; i < bank->num_sectors; i++)
+	for (unsigned int i = 0; i < bank->num_sectors; i++)
 		bank->sectors[i].is_protected = (i < num_protected) ? 1 : 0;
 
 	return ERROR_OK;
 }
 
-static int xmc1xxx_get_info_command(struct flash_bank *bank, char *buf, int buf_size)
+static int xmc1xxx_get_info_command(struct flash_bank *bank, struct command_invocation *cmd)
 {
 	uint32_t chipid[8];
 	int i, retval;
@@ -427,7 +427,8 @@ static int xmc1xxx_get_info_command(struct flash_bank *bank, char *buf, int buf_
 	}
 	LOG_DEBUG("ID[7] = %08" PRIX32, chipid[7]);
 
-	snprintf(buf, buf_size, "XMC%" PRIx32 "00 %X flash %uKB ROM %uKB SRAM %uKB",
+	command_print_sameline(cmd,
+			"XMC%" PRIx32 "00 %" PRIX32 " flash %" PRIu32 "KB ROM %" PRIu32 "KB SRAM %" PRIu32 "KB",
 			(chipid[0] >> 12) & 0xff,
 			0xAA + (chipid[7] >> 28) - 1,
 			(((chipid[6] >> 12) & 0x3f) - 1) * 4,
@@ -442,7 +443,7 @@ static int xmc1xxx_probe(struct flash_bank *bank)
 	struct xmc1xxx_flash_bank *xmc_bank = bank->driver_priv;
 	uint32_t flash_addr = bank->base;
 	uint32_t idchip, flsize;
-	int i, retval;
+	int retval;
 
 	if (xmc_bank->probed)
 		return ERROR_OK;
@@ -475,7 +476,7 @@ static int xmc1xxx_probe(struct flash_bank *bank)
 	bank->size = bank->num_sectors * 4 * 1024;
 	bank->sectors = calloc(bank->num_sectors,
 			       sizeof(struct flash_sector));
-	for (i = 0; i < bank->num_sectors; i++) {
+	for (unsigned int i = 0; i < bank->num_sectors; i++) {
 		if (i == 0) {
 			bank->sectors[i].size = 0x200;
 			bank->sectors[i].offset = 0xE00;
@@ -519,24 +520,8 @@ FLASH_BANK_COMMAND_HANDLER(xmc1xxx_flash_bank_command)
 	return ERROR_OK;
 }
 
-static const struct command_registration xmc1xxx_exec_command_handlers[] = {
-	COMMAND_REGISTRATION_DONE
-};
-
-static const struct command_registration xmc1xxx_command_handlers[] = {
-	{
-		.name = "xmc1xxx",
-		.mode = COMMAND_ANY,
-		.help = "xmc1xxx flash command group",
-		.usage = "",
-		.chain = xmc1xxx_exec_command_handlers,
-	},
-	COMMAND_REGISTRATION_DONE
-};
-
 const struct flash_driver xmc1xxx_flash = {
 	.name = "xmc1xxx",
-	.commands = xmc1xxx_command_handlers,
 	.flash_bank_command = xmc1xxx_flash_bank_command,
 	.info = xmc1xxx_get_info_command,
 	.probe = xmc1xxx_probe,

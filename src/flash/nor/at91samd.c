@@ -1,19 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /***************************************************************************
  *   Copyright (C) 2013 by Andrey Yurovsky                                 *
  *   Andrey Yurovsky <yurovsky@gmail.com>                                  *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -23,6 +12,7 @@
 #include "imp.h"
 #include "helper/binarybuffer.h"
 
+#include <jtag/jtag.h>
 #include <target/cortex_m.h>
 
 #define SAMD_NUM_PROT_BLOCKS	16
@@ -41,7 +31,7 @@
 #define SAMD_NVMCTRL_CTRLA		0x00	/* NVM control A register */
 #define SAMD_NVMCTRL_CTRLB		0x04	/* NVM control B register */
 #define SAMD_NVMCTRL_PARAM		0x08	/* NVM parameters register */
-#define SAMD_NVMCTRL_INTFLAG	0x18	/* NVM Interupt Flag Status & Clear */
+#define SAMD_NVMCTRL_INTFLAG	0x18	/* NVM Interrupt Flag Status & Clear */
 #define SAMD_NVMCTRL_STATUS		0x18	/* NVM status register */
 #define SAMD_NVMCTRL_ADDR		0x1C	/* NVM address register */
 #define SAMD_NVMCTRL_LOCK		0x20	/* NVM Lock section register */
@@ -52,8 +42,8 @@
 /* NVMCTRL commands.  See Table 20-4 in 42129F–SAM–10/2013 */
 #define SAMD_NVM_CMD_ER		0x02		/* Erase Row */
 #define SAMD_NVM_CMD_WP		0x04		/* Write Page */
-#define SAMD_NVM_CMD_EAR	0x05		/* Erase Auxilary Row */
-#define SAMD_NVM_CMD_WAP	0x06		/* Write Auxilary Page */
+#define SAMD_NVM_CMD_EAR	0x05		/* Erase Auxiliary Row */
+#define SAMD_NVM_CMD_WAP	0x06		/* Write Auxiliary Page */
 #define SAMD_NVM_CMD_LR		0x40		/* Lock Region */
 #define SAMD_NVM_CMD_UR		0x41		/* Unlock Region */
 #define SAMD_NVM_CMD_SPRM	0x42		/* Set Power Reduction Mode */
@@ -250,6 +240,7 @@ static const struct samd_part saml21_parts[] = {
 
     /* SAMR34/R35 parts have integrated SAML21 with a lora radio */
 	{ 0x28, "SAMR34J18", 256, 32 },
+	{ 0x2B, "SAMR35J18", 256, 32 },
 };
 
 /* Known SAML22 parts. */
@@ -385,7 +376,7 @@ static const struct samd_part *samd_find_part(uint32_t id)
 {
 	uint8_t devsel = SAMD_GET_DEVSEL(id);
 	const struct samd_family *family = samd_find_family(id);
-	if (family == NULL)
+	if (!family)
 		return NULL;
 
 	for (unsigned i = 0; i < family->num_parts; i++) {
@@ -398,7 +389,7 @@ static const struct samd_part *samd_find_part(uint32_t id)
 
 static int samd_protect_check(struct flash_bank *bank)
 {
-	int res, prot_block;
+	int res;
 	uint16_t lock;
 
 	res = target_read_u16(bank->target,
@@ -407,7 +398,7 @@ static int samd_protect_check(struct flash_bank *bank)
 		return res;
 
 	/* Lock bits are active-low */
-	for (prot_block = 0; prot_block < bank->num_prot_blocks; prot_block++)
+	for (unsigned int prot_block = 0; prot_block < bank->num_prot_blocks; prot_block++)
 		bank->prot_blocks[prot_block].is_protected = !(lock & (1u<<prot_block));
 
 	return ERROR_OK;
@@ -452,7 +443,7 @@ static int samd_probe(struct flash_bank *bank)
 	}
 
 	part = samd_find_part(id);
-	if (part == NULL) {
+	if (!part) {
 		LOG_ERROR("Couldn't find part corresponding to DID %08" PRIx32, id);
 		return ERROR_FAIL;
 	}
@@ -606,7 +597,7 @@ static int samd_get_reservedmask(struct target *target, uint64_t *mask)
 	}
 	const struct samd_family *family;
 	family = samd_find_family(id);
-	if (family == NULL) {
+	if (!family) {
 		LOG_ERROR("Couldn't determine device family");
 		return ERROR_FAIL;
 	}
@@ -725,10 +716,10 @@ static int samd_modify_user_row(struct target *target, uint64_t value,
 	return samd_modify_user_row_masked(target, value << startb, mask);
 }
 
-static int samd_protect(struct flash_bank *bank, int set, int first_prot_bl, int last_prot_bl)
+static int samd_protect(struct flash_bank *bank, int set,
+		unsigned int first, unsigned int last)
 {
 	int res = ERROR_OK;
-	int prot_block;
 
 	/* We can issue lock/unlock region commands with the target running but
 	 * the settings won't persist unless we're able to modify the LOCK regions
@@ -738,7 +729,7 @@ static int samd_protect(struct flash_bank *bank, int set, int first_prot_bl, int
 		return ERROR_TARGET_NOT_HALTED;
 	}
 
-	for (prot_block = first_prot_bl; prot_block <= last_prot_bl; prot_block++) {
+	for (unsigned int prot_block = first; prot_block <= last; prot_block++) {
 		if (set != bank->prot_blocks[prot_block].is_protected) {
 			/* Load an address that is within this protection block (we use offset 0) */
 			res = target_write_u32(bank->target,
@@ -763,7 +754,7 @@ static int samd_protect(struct flash_bank *bank, int set, int first_prot_bl, int
 
 	res = samd_modify_user_row(bank->target,
 			set ? (uint64_t)0 : (uint64_t)UINT64_MAX,
-			48 + first_prot_bl, 48 + last_prot_bl);
+			48 + first, 48 + last);
 	if (res != ERROR_OK)
 		LOG_WARNING("SAMD: protect settings were not made persistent!");
 
@@ -775,9 +766,10 @@ exit:
 	return res;
 }
 
-static int samd_erase(struct flash_bank *bank, int first_sect, int last_sect)
+static int samd_erase(struct flash_bank *bank, unsigned int first,
+		unsigned int last)
 {
-	int res, s;
+	int res;
 	struct samd_info *chip = (struct samd_info *)bank->driver_priv;
 
 	if (bank->target->state != TARGET_HALTED) {
@@ -792,7 +784,7 @@ static int samd_erase(struct flash_bank *bank, int first_sect, int last_sect)
 	}
 
 	/* For each sector to be erased */
-	for (s = first_sect; s <= last_sect; s++) {
+	for (unsigned int s = first; s <= last; s++) {
 		res = samd_erase_row(bank->target, bank->sectors[s].offset);
 		if (res != ERROR_OK) {
 			LOG_ERROR("SAMD: failed to erase sector %d at 0x%08" PRIx32, s, bank->sectors[s].offset);
@@ -914,9 +906,7 @@ static int samd_write(struct flash_bank *bank, const uint8_t *buffer,
 	}
 
 free_pb:
-	if (pb)
-		free(pb);
-
+	free(pb);
 	return res;
 }
 
@@ -942,11 +932,6 @@ FLASH_BANK_COMMAND_HANDLER(samd_flash_bank_command)
 
 	bank->driver_priv = chip;
 
-	return ERROR_OK;
-}
-
-COMMAND_HANDLER(samd_handle_info_command)
-{
 	return ERROR_OK;
 }
 
@@ -1052,31 +1037,6 @@ COMMAND_HANDLER(samd_handle_eeprom_command)
 	return res;
 }
 
-static COMMAND_HELPER(get_u64_from_hexarg, unsigned int num, uint64_t *value)
-{
-	if (num >= CMD_ARGC) {
-		command_print(CMD, "Too few Arguments.");
-		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
-
-	if (strlen(CMD_ARGV[num]) >= 3 &&
-		CMD_ARGV[num][0] == '0' &&
-		CMD_ARGV[num][1] == 'x') {
-		char *check = NULL;
-		*value = strtoull(&(CMD_ARGV[num][2]), &check, 16);
-		if ((value == 0 && errno == ERANGE) ||
-			check == NULL || *check != 0) {
-			command_print(CMD, "Invalid 64-bit hex value in argument %d.",
-				num + 1);
-			return ERROR_COMMAND_SYNTAX_ERROR;
-		}
-	} else {
-		command_print(CMD, "Argument %d needs to be a hex value.", num + 1);
-		return ERROR_COMMAND_SYNTAX_ERROR;
-	}
-	return ERROR_OK;
-}
-
 COMMAND_HANDLER(samd_handle_nvmuserrow_command)
 {
 	int res = ERROR_OK;
@@ -1103,14 +1063,12 @@ COMMAND_HANDLER(samd_handle_nvmuserrow_command)
 			mask &= NVMUSERROW_LOCKBIT_MASK;
 
 			uint64_t value;
-			res = CALL_COMMAND_HANDLER(get_u64_from_hexarg, 0, &value);
-			if (res != ERROR_OK)
-				return res;
+			COMMAND_PARSE_NUMBER(u64, CMD_ARGV[0], value);
+
 			if (CMD_ARGC == 2) {
 				uint64_t mask_temp;
-				res = CALL_COMMAND_HANDLER(get_u64_from_hexarg, 1, &mask_temp);
-				if (res != ERROR_OK)
-					return res;
+				COMMAND_PARSE_NUMBER(u64, CMD_ARGV[1], mask_temp);
+
 				mask &= mask_temp;
 			}
 			res = samd_modify_user_row_masked(target, value, mask);
@@ -1235,14 +1193,6 @@ static const struct command_registration at91samd_exec_command_handlers[] = {
 		.handler = samd_handle_reset_deassert,
 		.mode = COMMAND_EXEC,
 		.help = "Deassert internal reset held by DSU.",
-		.usage = "",
-	},
-	{
-		.name = "info",
-		.handler = samd_handle_info_command,
-		.mode = COMMAND_EXEC,
-		.help = "Print information about the current at91samd chip "
-			"and its flash configuration.",
 		.usage = "",
 	},
 	{

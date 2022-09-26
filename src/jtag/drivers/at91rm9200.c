@@ -1,19 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 /***************************************************************************
  *   Copyright (C) 2006 by Anders Larsen                                   *
  *   al@alarsen.net                                                        *
- *                                                                         *
- *   This program is free software; you can redistribute it and/or modify  *
- *   it under the terms of the GNU General Public License as published by  *
- *   the Free Software Foundation; either version 2 of the License, or     *
- *   (at your option) any later version.                                   *
- *                                                                         *
- *   This program is distributed in the hope that it will be useful,       *
- *   but WITHOUT ANY WARRANTY; without even the implied warranty of        *
- *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the         *
- *   GNU General Public License for more details.                          *
- *                                                                         *
- *   You should have received a copy of the GNU General Public License     *
- *   along with this program.  If not, see <http://www.gnu.org/licenses/>. *
  ***************************************************************************/
 
 #ifdef HAVE_CONFIG_H
@@ -209,7 +198,7 @@ static int at91rm9200_init(void)
 
 	cur_device = devices;
 
-	if (at91rm9200_device == NULL || at91rm9200_device[0] == 0) {
+	if (!at91rm9200_device || at91rm9200_device[0] == 0) {
 		at91rm9200_device = "rea_ecr";
 		LOG_WARNING("No at91rm9200 device specified, using default 'rea_ecr'");
 	}
@@ -231,14 +220,14 @@ static int at91rm9200_init(void)
 
 	dev_mem_fd = open("/dev/mem", O_RDWR | O_SYNC);
 	if (dev_mem_fd < 0) {
-		perror("open");
+		LOG_ERROR("open: %s", strerror(errno));
 		return ERROR_JTAG_INIT_FAILED;
 	}
 
 	sys_controller = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
 				MAP_SHARED, dev_mem_fd, AT91C_BASE_SYS);
 	if (sys_controller == MAP_FAILED) {
-		perror("mmap");
+		LOG_ERROR("mmap: %s", strerror(errno));
 		close(dev_mem_fd);
 		return ERROR_JTAG_INIT_FAILED;
 	}
