@@ -2537,7 +2537,7 @@ static int aarch64_examine_first(struct target *target)
 	//begin: by stone
 	aarch64->wrp_num = (uint32_t)((debug >> 20) & 0x0F) + 1;
 	aarch64->wrp_num_available = aarch64->wrp_num;
-	free(aarch64->wrp_list);
+	free(aarch64->wrp_list); //by stone
 	aarch64->wrp_list = calloc(aarch64->wrp_num, sizeof(struct aarch64_wrp));
 	for (i = 0; i < aarch64->wrp_num; i++)
 	{
