@@ -44,5 +44,9 @@ Any question post your issue here:
 https://github.com/fatalfeel/openocd_integrated/issues
 
 7.
-How to use OpenOcd in eclipse:
+How to use OpenOcd in eclipse
 http://fatalfeel.blogspot.com/2015/12/openocd-with-eclipse-debug-kernel-of.html
+
+8.
+Jtag always hook even power reset
+https://www.mediafire.com/file/tfhu2mxr0mvjp34/ocd_service.sh
