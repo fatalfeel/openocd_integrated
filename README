@@ -27,10 +27,12 @@ http://repo.or.cz/r/libjaylink.git
 
 4.
 OpenOcd need to receive 64 bits address from gdb on aarch64:
-(gdb normal):
-http://www.mediafire.com/file/fi4mstilpruspkv/build_aarch64_gdb.sh
-(gdb can read lzma section)
-http://www.mediafire.com/file/a1xeyw0l3nvhrid/build_aarch64_lzma_gdb.sh
+a. normal
+https://www.mediafire.com/file/fi4mstilpruspkv/build_aarch64_gdb.sh
+b. lzma section read
+https://www.mediafire.com/file/a1xeyw0l3nvhrid/build_aarch64_lzma_gdb.sh
+c. need cross compiler shared libs run in target
+https://www.mediafire.com/file/l5bh2knh0lu4ix2/build_aarch64_gdbserver.sh
 
 5.
 After configure and make, remove directory .git
