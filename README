@@ -16,7 +16,7 @@ sudo autoreconf
 make && make install
 
 3.
-openocd 0.10.1 code base:
+openocd 0.12.0 code base:
 https://git.code.sf.net/p/openocd/code
 
 jimtcl:
