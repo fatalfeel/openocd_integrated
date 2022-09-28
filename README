@@ -31,7 +31,7 @@ a. normal
 https://www.mediafire.com/file/fi4mstilpruspkv/build_aarch64_gdb.sh
 b. lzma section read
 https://www.mediafire.com/file/a1xeyw0l3nvhrid/build_aarch64_lzma_gdb.sh
-c. need cross compiler shared libs run in target
+c. gdbserver with compiler shared libs run in target
 https://www.mediafire.com/file/l5bh2knh0lu4ix2/build_aarch64_gdbserver.sh
 
 5.
