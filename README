@@ -42,13 +42,13 @@ make clean && make
 Now you can debug and set breakpoint in OpenOcd source.
 
 6.
-Any question post your issue here:
-https://github.com/fatalfeel/openocd_integrated/issues
-
-7.
 How to use OpenOcd in eclipse
 http://fatalfeel.blogspot.com/2015/12/openocd-with-eclipse-debug-kernel-of.html
 
+7.
+bus blaster v3c v4.1a jtag to swd & swd to jtag
+https://fatalfeel.blogspot.com/2013/09/bus-blaster-flash-to-swd-mode-in-openocd.html
+
 8.
-Jtag always hook even power reset
+The script help you always hook even target power reset
 https://www.mediafire.com/file/tfhu2mxr0mvjp34/ocd_service.sh
