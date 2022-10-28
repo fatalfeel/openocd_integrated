@@ -37,7 +37,7 @@ https://www.mediafire.com/file/l5bh2knh0lu4ix2/build_aarch64_gdbserver.sh
 5.
 After configure and make, remove directory .git
 Import OpenOcd peoject in eclipse.
-Search all O2, O3 in "Makefile" files and change O2, O3 to O0
+Search all "Makefile" and change -O2, -O3 to -O0
 make clean && make
 Now you can debug and set breakpoint in OpenOcd source.
 
